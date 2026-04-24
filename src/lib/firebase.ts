@@ -17,8 +17,9 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
 
-// Export Firestore dan Auth agar bisa digunakan di file React (komponen) Anda
+// Export agar tidak error unused variable di Vercel, dan siap dipakai di komponen lain
+export const analytics = getAnalytics(app); 
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+
