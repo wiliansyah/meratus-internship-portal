@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, query } from 'firebase/firestore';
 import { db } from './lib/firebase'; // Memanggil koneksi database Firebase
 import { 
   Users, Building2, Calendar, FileText, Search, Plus, Upload, Download,
@@ -56,27 +56,29 @@ const initialSiteVisits = [
   { id: 2, institution: 'SMK Barunawati', date: '2026-04-10', participants: 30, location: 'Head Office', status: 'Completed' },
 ];
 
+// SOP INTERN IMPROVED
 const defaultInternSOP = [
-  { id: 1, icon: 'book', color: 'slate', title: '1. Jenis Internship di Meratus', description: 'Program Internship di Meratus terbagi menjadi beberapa kategori:', bullets: ['Formal Internship Request: Jalur resmi melalui HRBP atau program MBKM (Magang Kampus).', 'Mandiri: Permohonan langsung dari mahasiswa, tidak terikat langsung dengan universitas.', 'Informal Internship Request: Permintaan langsung dari user/manajemen, tidak melalui jalur formal HRBP.'], highlight: 'Referensi Dokumen: "Internship 2025"' },
-  { id: 2, icon: 'database', color: 'blue', title: '2. Dokumentasi & Pipeline Internship', description: 'Penerimaan dokumen (melalui email resmi, surat fisik, atau permintaan user) wajib direkap dalam Database/Pipeline Internship. Berfungsi untuk:', bullets: ['Tracking kandidat & intern aktif.', 'Monitoring status (request, interview, accepted, ongoing, completed).', 'Kontrol administrasi program sebagai sumber data pelaporan.'] },
-  { id: 3, icon: 'usercheck', color: 'indigo', title: '3. Proses Konfirmasi, Interview & Administrasi', description: 'Konfirmasi kebutuhan ke SBU/SFU terkait ketersediaan posisi.', subSections: [ { title: 'A. Tanpa Interview', bullets: ['Jika user tidak meminta interview, proses langsung dilanjutkan ke penerbitan Surat Penerimaan Magang.'] }, { title: 'B. Dengan Interview', bullets: ['Jika diperlukan, dijadwalkan interview. Hasil interview menjadi dasar keputusan penerbitan Surat Penerimaan.'] } ] },
-  { id: 4, icon: 'pen', color: 'amber', title: '4. Penyelesaian Dokumen & Pengiriman Surat', description: 'Surat Penerimaan Magang dikirimkan kepada pihak universitas (mahasiswa di-cc dalam email). Mahasiswa kemudian wajib menyelesaikan administrasi akhir:', bullets: ['Mengisi Form Data Diri.', 'Menandatangani NDA (Non-Disclosure Agreement).'], highlight: 'Setelah dokumen diterima kembali, status di Pipeline harus segera di-update.' },
-  { id: 5, icon: 'presentation', color: 'teal', title: '5. Hari Pertama Magang (Onboarding Awal)', description: 'Pada hari pertama, mahasiswa diberikan pengenalan perusahaan yang mencakup:', bullets: ['Gambaran umum Meratus Group, struktur organisasi, dan budaya kerja.', 'Ketentuan umum dan peraturan selama magang.', 'Informasi supervisor/unit penempatan.', 'Penyerahan Form Absensi sebagai dasar kontrol kehadiran.'] },
-  { id: 6, icon: 'clipboard', color: 'purple', title: '6. Monitoring & Penyelesaian Program', description: 'Selama magang, monitoring teknis harian dilakukan oleh Supervisor SBU/SFU terkait. Tim Internship melakukan kontrol administrasi melalui rekap database dan Form Absensi.', highlight: 'Penyelesaian Magang: Pada akhir periode, perusahaan akan menerbitkan Surat Keterangan Magang. Perusahaan tidak menerbitkan sertifikat, melainkan hanya surat keterangan resmi.' },
-  { id: 7, icon: 'dollar', color: 'emerald', title: '7. Ketentuan Tunjangan (Optional - Case Khusus)', description: 'Pada prinsipnya program magang tidak berbayar. Namun untuk kasus khusus (dengan persetujuan unit):', bullets: ['Tunjangan berasal dari budget SBU/SFU terkait.', 'Rata-rata tunjangan adalah Rp100.000 / hari (menyesuaikan kebijakan unit).', 'Opsi Pembayaran 1: Meratus Academy merekap absensi dan diserahkan ke Payroll (Ibu Amelia Dewi) untuk diproses.', 'Opsi Pembayaran 2: Ditanggung & dibayarkan secara mandiri oleh AP SBU/SFU terkait (Intern didaftarkan sbg 3rd party/vendor).', 'Cut-off pembayaran dilakukan pada minggu pertama setiap bulan.'] }
+  { id: 1, icon: 'book', color: 'slate', title: '1. Jenis & Ketentuan Internship', description: 'Program Internship di Meratus terbagi menjadi beberapa kategori dan harus dipahami sebelum memproses:', bullets: ['Formal Internship Request: Jalur resmi melalui HRBP atau program MBKM (Magang Kampus), mewajibkan MOU/PKS.', 'Mandiri: Permohonan langsung dari mahasiswa, wajib menyertakan surat pengantar universitas.', 'Informal Request: Permintaan langsung dari user/manajemen, tetap wajib melengkapi form data diri & NDA.'], highlight: 'Referensi Dokumen Kebijakan: "Internship Policy Guideline 2025"' },
+  { id: 2, icon: 'database', color: 'blue', title: '2. Pencatatan Pipeline (Initial Phase)', description: 'Setiap permohonan magang (email/surat/WhatsApp user) wajib langsung masuk ke dalam Database/Pipeline. Langkah:', bullets: ['Input nama, universitas, jurusan.', 'Set status ke "Process".', 'Lampirkan CV dan Surat Pengantar (disimpan di GDrive khusus Internship).'] },
+  { id: 3, icon: 'usercheck', color: 'indigo', title: '3. Konfirmasi User & Proses Interview', description: 'Tim Internship / Learning & Culture melakukan cross-check ketersediaan posisi di SBU/SFU terkait.', subSections: [ { title: 'A. Screening & Interview', bullets: ['Jadwalkan interview bersama user jika diminta.', 'Catat hasil feedback interview (Approved/Rejected).'] }, { title: 'B. Keputusan Final', bullets: ['Update status pipeline menjadi "Accepted" atau "Rejected".', 'Jika Rejected, kirimkan email penolakan standar ke mahasiswa/universitas.'] } ] },
+  { id: 4, icon: 'pen', color: 'amber', title: '4. Administrasi Penerimaan & Legalitas', description: 'Fase kritis sebelum mahasiswa mulai magang. Dokumen wajib diterbitkan dan diselesaikan:', bullets: ['Penerbitan Surat Penerimaan Magang (kirim via email ke Univ, cc mahasiswa).', 'Mahasiswa wajib mengisi dan menandatangani Form Data Diri.', 'Mahasiswa wajib membaca dan menandatangani NDA (Non-Disclosure Agreement) bermaterai.', 'Update join date & finish date di pipeline.'], highlight: 'Akses ID Card / Sistem IT TIDAK AKAN diberikan sebelum NDA ditandatangani.' },
+  { id: 5, icon: 'presentation', color: 'teal', title: '5. Hari Pertama: Onboarding & Handover', description: 'Pada hari H, mahasiswa hadir di Head Office / Site untuk proses induksi:', bullets: ['Pemberian Safety Briefing (terutama untuk penempatan Depo/Warehouse).', 'Pemaparan Company Profile dan Budaya Kerja (Meratus Way).', 'Penjelasan jam kerja, tata tertib, dan sistem absensi (Form Absensi Excel).', 'Handover mahasiswa kepada Supervisor / Mentor terkait.'] },
+  { id: 6, icon: 'clipboard', color: 'purple', title: '6. Monitoring, Evaluasi, & Penyelesaian', description: 'Pengawasan dilakukan secara berkala. Menjelang akhir masa magang, lakukan langkah berikut:', bullets: ['H-14: Reminder kepada Mentor untuk melakukan penilaian performa magang.', 'H-7: Mahasiswa mengumpulkan form absensi yang telah ditandatangani mentor.', 'H-1: Mahasiswa mengembalikan ID Card atau aset perusahaan yang dipinjam (Exit Clearance).', 'Penerbitan Surat Keterangan Magang (Certificate of Completion) sebagai bukti sah telah menyelesaikan magang.'] },
+  { id: 7, icon: 'dollar', color: 'emerald', title: '7. Kebijakan Tunjangan (Allowance)', description: 'Pada prinsipnya magang bersifat Unpaid. Jika ada tunjangan khusus dari unit terkait:', bullets: ['Tunjangan bersumber murni dari budget SBU/SFU yang mengusulkan.', 'Rata-rata tunjangan (jika disetujui) adalah Rp100.000 / kehadiran aktif.', 'Skema 1: Meratus Academy merekap absensi -> diserahkan ke tim Payroll untuk pencairan.', 'Skema 2: Diproses langsung oleh AP SBU/SFU terkait (Intern didaftarkan sebagai vendor/3rd party).'] }
 ];
 
+// SOP VISIT IMPROVED
 const defaultVisitSOP = [
-  { id: 1, icon: 'filetext', color: 'blue', title: '1. Overview Site Visit', description: 'Program Site Visit merupakan kegiatan kunjungan dari pihak eksternal (universitas/sekolah) ke Meratus untuk tujuan edukasi dan pengenalan industri. Kunjungan terdiri dari dua bagian utama: Kegiatan di Head Office dan Kunjungan area operasional (Depo/Warehouse). Koordinasi dilakukan antara Meratus Academy dan unit terkait.' },
-  { id: 2, icon: 'users', color: 'indigo', title: '2. Proses Permintaan & Initial Meeting', description: 'Permintaan diterima melalui email, surat resmi, atau koordinasi langsung. Pastikan hal berikut disepakati:', bullets: ['Tanggal dan waktu kunjungan', 'Jumlah peserta & Rundown kegiatan', 'Area operasional yang dikunjungi (memengaruhi PIC, Akses, APD)'], highlight: 'Ketentuan APD: Wajib digunakan di depo. Jika peserta tidak membawa, peminjaman skema: Corp Comm (15 set), Meratus Academy (10 set), sisanya dari depo terkait.' },
-  { id: 3, icon: 'settings', color: 'slate', title: '3. Koordinasi Internal & Persiapan Teknis', description: 'Setelah detail disepakati, dilakukan koordinasi internal:', subSections: [ { title: 'Ke GA (Ruangan & Fasilitas)', bullets: ['Booking Café Lantai 2', 'Setting layout: Classroom', 'Email booking ke GA', 'Cek LCD, Mic, Sound System'] }, { title: 'Ke Depo / Warehouse', bullets: ['Menentukan PIC pendamping lapangan', 'Info jumlah peserta', 'Info rundown kegiatan'] } ] },
-  { id: 4, icon: 'clock', color: 'amber', title: '4. Persiapan H-1', description: 'Sehari sebelum pelaksanaan, dilakukan langkah berikut:', bullets: ['Koordinasi Receptionist (Kartu Visitor)', 'Koordinasi Kendaraan/Bus ke Security', 'Siapkan Souvenir (penyerahan simbolis)', 'Reminder Internal & Cek kesiapan APD'] },
-  { id: 5, icon: 'presentation', color: 'teal', title: '5. Pelaksanaan Hari-H', description: 'Pelaksanaan hari-H dibagi ke dalam dua tempat utama:', subSections: [ { title: 'Head Office', bullets: ['Distribusi Kartu Visitor', 'Arahkan ke Café Lantai 2', 'Company Intro & Tanya Jawab', 'Penyerahan Souvenir', 'Safety Briefing'] }, { title: 'Mobilisasi & Depo', bullets: ['Penggunaan APD Wajib', 'Site Tour didampingi PIC', 'Penjelasan operasional', 'Pengembalian Visitor Card'] } ] },
-  { id: 6, icon: 'camera', color: 'purple', title: '6. Rekap & Dokumentasi', description: 'Setelah kegiatan selesai, pastikan untuk menyimpan Foto Kegiatan dan Daftar Hadir. Data ini akan digunakan untuk keperluan monitoring dan reporting kegiatan eksternal.' }
+  { id: 1, icon: 'filetext', color: 'blue', title: '1. Inisiasi & Screening Permintaan', description: 'Semua permohonan kunjungan industri (Site Visit) harus dievaluasi kelayakannya.', bullets: ['Terima surat permohonan resmi dari Universitas/Sekolah.', 'Cek ketersediaan jadwal, minimal H-14 dari tanggal pelaksanaan.', 'Pastikan jumlah peserta rasional dengan kapasitas HO/Depo (maksimal 50 orang).'] },
+  { id: 2, icon: 'users', color: 'indigo', title: '2. Koordinasi Internal & Approval', description: 'Penentuan PIC dan penyusunan rundown kasar:', subSections: [ { title: 'Head Office (HO)', bullets: ['Konfirmasi dengan Corp Comm (Bu Annisa) untuk materi Company Profile.', 'Booking ruangan (Café Lt.2 / Meeting Room besar).'] }, { title: 'Site / Depo', bullets: ['Hubungi PIC Depo terkait (DTT/DMS/DMM) untuk izin kunjungan lapangan.', 'Konfirmasi kebutuhan APD (Helm, Rompi, Sepatu Safety).'] } ] },
+  { id: 3, icon: 'settings', color: 'slate', title: '3. Finalisasi & Persiapan Teknis (H-3)', description: 'Memastikan semua operasional logistik siap:', bullets: ['Email undangan resmi balasan ke pihak Universitas beserta rundown final.', 'Briefing internal dengan GA terkait layout ruangan, AC, Mic, dan LCD.', 'Memastikan ketersediaan suvenir perusahaan untuk penyerahan plakat.', 'Koordinasi dengan tim Security HO terkait slot parkir bus/kendaraan rombongan.'] },
+  { id: 4, icon: 'clock', color: 'amber', title: '4. Eksekusi Hari H: Penyambutan', description: 'Pelaksanaan sesi dalam ruangan:', bullets: ['Registrasi peserta dan penukaran Visitor Card.', 'Pembukaan, Safety Briefing ruang tertutup, dan sambutan manajemen.', 'Pemaparan Company Profile dan sesi Q&A.', 'Sesi foto bersama dan penyerahan plakat/suvenir.'] },
+  { id: 5, icon: 'presentation', color: 'teal', title: '5. Eksekusi Hari H: Site Tour', description: 'Jika ada sesi kunjungan lapangan:', bullets: ['Mobilisasi peserta dari HO menuju Depo/Warehouse.', 'Pembagian dan pengecekan pemakaian APD wajib.', 'Tur lapangan dipandu langsung oleh SPV/Manager Site setempat.', 'Pengembalian APD dan Visitor Card sebelum rombongan pulang.'] },
+  { id: 6, icon: 'camera', color: 'purple', title: '6. Post-Event & Reporting', description: 'Tugas administrasi setelah kegiatan selesai:', bullets: ['Upload dokumentasi foto/video ke folder GDrive Corporate.', 'Update status tracker Site Visit menjadi "Completed".', 'Rekap jumlah peserta untuk laporan bulanan Learning & Culture.'] }
 ];
 
 // --- ICON RENDERER HELPER ---
-const RenderIcon = ({ name, className }: { name: string, className: string }) => {
+const RenderIcon = ({ name, className }) => {
   switch(name) {
     case 'book': return <BookOpen className={className} />;
     case 'database': return <Database className={className} />;
@@ -94,7 +96,7 @@ const RenderIcon = ({ name, className }: { name: string, className: string }) =>
   }
 };
 
-const colorClasses: Record<string, string> = {
+const colorClasses = {
   slate: 'text-slate-700 bg-slate-50 border-slate-200',
   blue: 'text-blue-700 bg-blue-50 border-blue-200',
   indigo: 'text-indigo-700 bg-indigo-50 border-indigo-200',
@@ -105,7 +107,7 @@ const colorClasses: Record<string, string> = {
 };
 
 // --- BADGE HELPER ---
-const getStatusBadge = (status: string) => {
+const getStatusBadge = (status) => {
   switch(status) {
     case 'Accepted': case 'Completed': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     case 'Process': case 'Ongoing': return 'bg-amber-100 text-amber-700 border-amber-200';
@@ -118,58 +120,55 @@ const getStatusBadge = (status: string) => {
 };
 
 export default function InternshipManagement() {
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'partnerships' | 'visits' | 'guidelines'>('pipeline');
+  const [activeTab, setActiveTab] = useState('pipeline');
   
   // -- STATES --
-  const [interns, setInterns] = useState<any[]>(initialInterns);
-  const [contacts, setContacts] = useState<any[]>(initialContacts);
-  const [schedules, setSchedules] = useState<any[]>(initialSchedules);
-  const [agreements, setAgreements] = useState<any[]>(initialAgreements);
-  const [visitContacts, setVisitContacts] = useState<any[]>(initialVisitContacts);
-  const [siteVisits, setSiteVisits] = useState<any[]>(initialSiteVisits);
+  const [interns, setInterns] = useState(initialInterns);
+  const [contacts, setContacts] = useState(initialContacts);
+  const [schedules, setSchedules] = useState(initialSchedules);
+  const [agreements, setAgreements] = useState(initialAgreements);
+  const [visitContacts, setVisitContacts] = useState(initialVisitContacts);
+  const [siteVisits, setSiteVisits] = useState(initialSiteVisits);
 
-  const [internSOP, setInternSOP] = useState<any[]>(defaultInternSOP);
-  const [visitSOP, setVisitSOP] = useState<any[]>(defaultVisitSOP);
+  const [internSOP, setInternSOP] = useState(defaultInternSOP);
+  const [visitSOP, setVisitSOP] = useState(defaultVisitSOP);
 
   // --- FIREBASE REALTIME SYNC ---
   useEffect(() => {
-    // Subscribe to all collections. If empty, fallback to local initial array visually.
     const unsubs = [
       onSnapshot(collection(db, 'interns'), snap => {
-        const data = snap.docs.map(d => d.data() as any).sort((a, b) => b.id - a.id);
+        const data = snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id);
         setInterns(snap.empty ? initialInterns : data);
       }),
       onSnapshot(collection(db, 'agreements'), snap => {
-        const data = snap.docs.map(d => d.data() as any).sort((a, b) => b.id - a.id);
+        const data = snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id);
         setAgreements(snap.empty ? initialAgreements : data);
       }),
       onSnapshot(collection(db, 'schedules'), snap => {
-        const data = snap.docs.map(d => d.data() as any).sort((a, b) => b.id - a.id);
+        const data = snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id);
         setSchedules(snap.empty ? initialSchedules : data);
       }),
       onSnapshot(collection(db, 'contacts'), snap => {
-        const data = snap.docs.map(d => d.data() as any).sort((a, b) => b.id - a.id);
+        const data = snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id);
         setContacts(snap.empty ? initialContacts : data);
       }),
       onSnapshot(collection(db, 'siteVisits'), snap => {
-        const data = snap.docs.map(d => d.data() as any).sort((a, b) => b.id - a.id);
+        const data = snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id);
         setSiteVisits(snap.empty ? initialSiteVisits : data);
       }),
       onSnapshot(collection(db, 'visitContacts'), snap => {
-        const data = snap.docs.map(d => d.data() as any).sort((a, b) => b.id - a.id);
+        const data = snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id);
         setVisitContacts(snap.empty ? initialVisitContacts : data);
       }),
       onSnapshot(collection(db, 'internSOP'), snap => {
-        const data = snap.docs.map(d => d.data() as any).sort((a, b) => a.id - b.id);
+        const data = snap.docs.map(d => d.data()).sort((a, b) => a.id - b.id);
         setInternSOP(snap.empty ? defaultInternSOP : data);
       }),
       onSnapshot(collection(db, 'visitSOP'), snap => {
-        const data = snap.docs.map(d => d.data() as any).sort((a, b) => a.id - b.id);
+        const data = snap.docs.map(d => d.data()).sort((a, b) => a.id - b.id);
         setVisitSOP(snap.empty ? defaultVisitSOP : data);
       })
     ];
-
-    // Cleanup listeners on unmount
     return () => unsubs.forEach(unsub => unsub());
   }, []);
 
@@ -179,43 +178,43 @@ export default function InternshipManagement() {
   const [universityFilter, setUniversityFilter] = useState('All');
   const [sbuFilter, setSbuFilter] = useState('All');
   const [timelineFilter, setTimelineFilter] = useState('All');
-  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState(null);
   
   // Modals
   const [isInternModalOpen, setIsInternModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [editingIntern, setEditingIntern] = useState<any>(null);
+  const [editingIntern, setEditingIntern] = useState(null);
   const [excelData, setExcelData] = useState('');
   
   const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
-  const [editingAgreement, setEditingAgreement] = useState<any>(null);
+  const [editingAgreement, setEditingAgreement] = useState(null);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
-  const [editingSchedule, setEditingSchedule] = useState<any>(null);
+  const [editingSchedule, setEditingSchedule] = useState(null);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
-  const [editingContact, setEditingContact] = useState<any>(null);
+  const [editingContact, setEditingContact] = useState(null);
   const [isVisitModalOpen, setIsVisitModalOpen] = useState(false);
-  const [editingVisit, setEditingVisit] = useState<any>(null);
+  const [editingVisit, setEditingVisit] = useState(null);
   const [isVisitContactModalOpen, setIsVisitContactModalOpen] = useState(false);
-  const [editingVisitContact, setEditingVisitContact] = useState<any>(null);
+  const [editingVisitContact, setEditingVisitContact] = useState(null);
 
   const [isSopModalOpen, setIsSopModalOpen] = useState(false);
-  const [editingSop, setEditingSop] = useState<any>(null);
-  const [editingSopType, setEditingSopType] = useState<'intern' | 'visit'>('intern');
+  const [editingSop, setEditingSop] = useState(null);
+  const [editingSopType, setEditingSopType] = useState('intern');
 
-  const [itemToDelete, setItemToDelete] = useState<{type: 'intern'|'agreement'|'schedule'|'contact'|'visit'|'visitContact', id: number} | null>(null);
+  const [itemToDelete, setItemToDelete] = useState(null);
 
   // --- PIPELINE LOGIC ---
   const uniqueUniversities = useMemo(() => Array.from(new Set(interns.map(i => i.university))).filter(u => u !== '-'), [interns]);
   const uniqueSBUs = useMemo(() => Array.from(new Set(interns.map(i => i.group))).filter(g => g !== '-'), [interns]);
 
-  const isFinishingSoon = (finishDateStr: string) => {
+  const isFinishingSoon = (finishDateStr) => {
     if (!finishDateStr || finishDateStr === '-') return false;
     const finishDate = new Date(finishDateStr);
     const diffDays = Math.ceil((finishDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
     return diffDays >= 0 && diffDays <= 30;
   };
 
-  const isFinished = (intern: any) => {
+  const isFinished = (intern) => {
     if (intern.internshipStatus === 'Finish') return true;
     if (!intern.finishDate || intern.finishDate === '-') return false;
     return new Date(intern.finishDate) < new Date();
@@ -244,7 +243,7 @@ export default function InternshipManagement() {
       });
     }
     if (sortConfig !== null) {
-      result.sort((a: any, b: any) => {
+      result.sort((a, b) => {
         if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
         if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
@@ -253,50 +252,90 @@ export default function InternshipManagement() {
     return result;
   }, [interns, searchTerm, statusFilter, universityFilter, sbuFilter, timelineFilter, sortConfig]);
 
-  const handleSort = (key: string) => {
+  const handleSort = (key) => {
     setSortConfig({ key, direction: sortConfig?.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
   };
 
   // --- FIREBASE CRUD HANDLERS ---
 
+  // IMPROVEMENT: IMPORT EXCEL DENGAN OVERWRITE LOGIC
   const handleImportExcel = async () => {
     const rows = excelData.trim().split('\n');
     if (rows.length < 2) return alert('Format tidak valid. Pastikan ada baris data selain header.');
     
-    const newInterns = rows.slice(1).map((row, index) => {
-      const cols = row.split('\t');
-      return {
-        id: Date.now() + index,
-        name: cols[0] || 'Unknown', university: cols[1] || '-', department: cols[2] || '-',
-        status: cols[3] || 'Process', group: cols[5] || '-', supervisor: cols[6] || '-',
-        joinDate: cols[7] || '-', finishDate: cols[8] || '-', internshipStatus: cols[9] || '-'
-      };
-    });
+    const confirmOverwrite = window.confirm("Peringatan: Melakukan import akan menimpa (overwrite) SELURUH data intern saat ini. Apakah Anda yakin ingin melanjutkan?");
+    if (!confirmOverwrite) return;
 
-    for (const intern of newInterns) {
-      await setDoc(doc(db, 'interns', intern.id.toString()), intern);
+    try {
+      // 1. Fetch current docs to delete
+      const internsRef = collection(db, 'interns');
+      const q = query(internsRef);
+      const querySnapshot = await getDocs(q);
+      
+      const batch = writeBatch(db);
+      
+      // 2. Add delete operations to batch
+      querySnapshot.forEach((document) => {
+        batch.delete(document.ref);
+      });
+
+      // 3. Prepare new data
+      const newInterns = rows.slice(1).map((row, index) => {
+        const cols = row.split('\t');
+        return {
+          id: Date.now() + index,
+          name: cols[0] || 'Unknown', 
+          university: cols[1] || '-', 
+          department: cols[2] || '-',
+          status: cols[3] || 'Process', 
+          group: cols[5] || '-', 
+          supervisor: cols[6] || '-',
+          joinDate: cols[7] || '-', 
+          finishDate: cols[8] || '-', 
+          internshipStatus: cols[9] || '-'
+        };
+      });
+
+      // 4. Add set operations to batch
+      newInterns.forEach(intern => {
+        const docRef = doc(db, 'interns', intern.id.toString());
+        batch.set(docRef, intern);
+      });
+
+      // 5. Execute batch
+      await batch.commit();
+      
+      setIsImportModalOpen(false); 
+      setExcelData('');
+      alert('Import berhasil! Data sebelumnya telah tertimpa dengan data baru.');
+    } catch (error) {
+      console.error("Gagal melakukan overwrite import: ", error);
+      alert("Terjadi kesalahan sistem saat overwrite data.");
     }
-    setIsImportModalOpen(false); 
-    setExcelData('');
   };
 
-  const handleSaveIntern = async (e: React.FormEvent<HTMLFormElement>) => {
+  // IMPROVEMENT: Edit Modal yang lebih lengkap validasinya
+  const handleSaveIntern = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
       id: editingIntern ? editingIntern.id : Date.now(),
-      name: formData.get('name') as string, university: formData.get('university') as string,
-      department: formData.get('department') as string, status: formData.get('status') as string,
-      group: formData.get('group') as string || '-', supervisor: formData.get('supervisor') as string || '-',
-      joinDate: formData.get('joinDate') as string || '-', finishDate: formData.get('finishDate') as string || '-',
-      internshipStatus: formData.get('internshipStatus') as string || '-'
+      name: formData.get('name'), 
+      university: formData.get('university'),
+      department: formData.get('department'), 
+      status: formData.get('status'),
+      group: formData.get('group') || '-', 
+      supervisor: formData.get('supervisor') || '-',
+      joinDate: formData.get('joinDate') || '-', 
+      finishDate: formData.get('finishDate') || '-',
+      internshipStatus: formData.get('internshipStatus') || '-'
     };
     
     await setDoc(doc(db, 'interns', data.id.toString()), data);
     setIsInternModalOpen(false);
   };
 
-  const [partnerSubTab, setPartnerSubTab] = useState<'agreements' | 'schedules' | 'contacts'>('agreements');
+  const [partnerSubTab, setPartnerSubTab] = useState('agreements');
   const [contactSearch, setContactSearch] = useState('');
 
   const partnershipStats = useMemo(() => ({
@@ -308,28 +347,28 @@ export default function InternshipManagement() {
 
   const filteredContacts = contacts.filter(c => c.name.toLowerCase().includes(contactSearch.toLowerCase()) || c.institution.toLowerCase().includes(contactSearch.toLowerCase()));
 
-  const handleSaveAgreement = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveAgreement = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
       id: editingAgreement ? editingAgreement.id : Date.now(),
-      type: formData.get('type') as string, status: formData.get('status') as string,
-      pihak1: formData.get('pihak1') as string, pihak2: formData.get('pihak2') as string,
-      tentang: formData.get('tentang') as string, nomor: formData.get('nomor') as string, durasi: formData.get('durasi') as string,
+      type: formData.get('type'), status: formData.get('status'),
+      pihak1: formData.get('pihak1'), pihak2: formData.get('pihak2'),
+      tentang: formData.get('tentang'), nomor: formData.get('nomor'), durasi: formData.get('durasi'),
     };
     
     await setDoc(doc(db, 'agreements', data.id.toString()), data);
     setIsAgreementModalOpen(false);
   };
 
-  const handleSaveSchedule = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveSchedule = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const selectedMonths = Array.from({length: 12}, (_, i) => i).filter(i => formData.get(`month_${i}`));
     const data = {
       id: editingSchedule ? editingSchedule.id : Date.now(),
-      institution: formData.get('institution') as string, duration: formData.get('duration') as string,
-      startPeriod: formData.get('startPeriod') as string, notes: formData.get('notes') as string,
+      institution: formData.get('institution'), duration: formData.get('duration'),
+      startPeriod: formData.get('startPeriod'), notes: formData.get('notes'),
       months: selectedMonths
     };
     
@@ -337,58 +376,58 @@ export default function InternshipManagement() {
     setIsScheduleModalOpen(false);
   };
 
-  const handleSaveContact = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveContact = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
       id: editingContact ? editingContact.id : Date.now(),
-      name: formData.get('name') as string, department: formData.get('department') as string,
-      institution: formData.get('institution') as string, contact: formData.get('contact') as string,
+      name: formData.get('name'), department: formData.get('department'),
+      institution: formData.get('institution'), contact: formData.get('contact'),
     };
     
     await setDoc(doc(db, 'contacts', data.id.toString()), data);
     setIsContactModalOpen(false);
   };
 
-  const [visitSubTab, setVisitSubTab] = useState<'tracker' | 'sop' | 'contacts'>('sop');
+  const [visitSubTab, setVisitSubTab] = useState('sop');
   
-  const handleSaveVisit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveVisit = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
       id: editingVisit ? editingVisit.id : Date.now(),
-      institution: formData.get('institution') as string, date: formData.get('date') as string,
-      participants: Number(formData.get('participants')), location: formData.get('location') as string, status: formData.get('status') as string,
+      institution: formData.get('institution'), date: formData.get('date'),
+      participants: Number(formData.get('participants')), location: formData.get('location'), status: formData.get('status'),
     };
     
     await setDoc(doc(db, 'siteVisits', data.id.toString()), data);
     setIsVisitModalOpen(false);
   };
 
-  const handleSaveVisitContact = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveVisitContact = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
       id: editingVisitContact ? editingVisitContact.id : Date.now(),
-      name: formData.get('name') as string, position: formData.get('position') as string,
-      relatedTo: formData.get('relatedTo') as string, notes: formData.get('notes') as string,
+      name: formData.get('name'), position: formData.get('position'),
+      relatedTo: formData.get('relatedTo'), notes: formData.get('notes'),
     };
     
     await setDoc(doc(db, 'visitContacts', data.id.toString()), data);
     setIsVisitContactModalOpen(false);
   };
 
-  const handleSaveSOP = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveSOP = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const bulletsRaw = formData.get('bullets') as string;
+    const bulletsRaw = formData.get('bullets');
     const bullets = bulletsRaw ? bulletsRaw.split('\n').filter(b => b.trim() !== '') : undefined;
     
     const updatedSOP = {
       ...editingSop,
-      title: formData.get('title') as string,
-      description: formData.get('description') as string,
-      highlight: formData.get('highlight') as string,
+      title: formData.get('title'),
+      description: formData.get('description'),
+      highlight: formData.get('highlight'),
     };
     if (!editingSop.subSections) updatedSOP.bullets = bullets;
 
@@ -403,7 +442,7 @@ export default function InternshipManagement() {
     if (!itemToDelete) return;
     const { type, id } = itemToDelete;
     
-    const collectionMap: Record<string, string> = {
+    const collectionMap = {
       intern: 'interns',
       agreement: 'agreements',
       schedule: 'schedules',
@@ -445,7 +484,7 @@ export default function InternshipManagement() {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id)}
               className={`flex items-center space-x-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
                 isActive 
                   ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-900/5' 
@@ -505,12 +544,12 @@ export default function InternshipManagement() {
 
                 <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500/20 outline-none max-w-[160px] truncate" value={universityFilter} onChange={(e) => setUniversityFilter(e.target.value)}>
                   <option value="All">Semua Universitas</option>
-                  {uniqueUniversities.map((uni, idx) => <option key={idx} value={uni as string}>{uni as string}</option>)}
+                  {uniqueUniversities.map((uni, idx) => <option key={idx} value={uni}>{uni}</option>)}
                 </select>
 
                 <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500/20 outline-none max-w-[150px] truncate" value={sbuFilter} onChange={(e) => setSbuFilter(e.target.value)}>
                   <option value="All">Semua SBU/SFU</option>
-                  {uniqueSBUs.map((sbu, idx) => <option key={idx} value={sbu as string}>{sbu as string}</option>)}
+                  {uniqueSBUs.map((sbu, idx) => <option key={idx} value={sbu}>{sbu}</option>)}
                 </select>
 
                 <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500/20 outline-none" value={timelineFilter} onChange={(e) => setTimelineFilter(e.target.value)}>
@@ -799,7 +838,7 @@ export default function InternshipManagement() {
             <div className="space-y-6">
               <div className="mb-2">
                 <h3 className="text-lg font-bold text-slate-900">SOP & Alur Site Visit</h3>
-                <p className="text-sm text-slate-500">Standar Operasional Prosedur penanganan kunjungan site visit.</p>
+                <p className="text-sm text-slate-500">Standar Operasional Prosedur penanganan kunjungan site visit yang telah ditingkatkan detailnya.</p>
               </div>
 
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 md:p-10">
@@ -944,28 +983,28 @@ export default function InternshipManagement() {
       {activeTab === 'guidelines' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
           
-          {/* Download Center */}
+          {/* Download Center - IMPROVED WITH REAL LINKS */}
           <div>
             <div className="mb-5">
               <h3 className="text-lg font-bold text-slate-900">Download Templates</h3>
-              <p className="text-sm text-slate-500">File master administrasi untuk keperluan penerimaan hingga penyelesaian magang.</p>
+              <p className="text-sm text-slate-500">File master administrasi untuk keperluan penerimaan hingga penyelesaian magang. Semua telah dihubungkan langsung ke Google Drive operasional.</p>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {[
-                { title: 'Surat Penerimaan', ext: '.pdf', icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
-                { title: 'Form Data Diri', ext: '.pdf', icon: UserCheck, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                { title: 'Template NDA', ext: '.pdf', icon: Shield, color: 'text-red-600', bg: 'bg-red-50' },
-                { title: 'Surat Keterangan', ext: '.pdf', icon: Award, color: 'text-purple-600', bg: 'bg-purple-50' },
-                { title: 'Form Absensi', ext: '.xlsx', icon: Calendar, color: 'text-orange-600', bg: 'bg-orange-50' },
+                { title: 'Surat Penerimaan', ext: '.pdf', icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50', link: 'https://drive.google.com/file/d/1x_vt1ZL96erFgDa32lOLRS2dAc0Ht8TT/view?usp=sharing' },
+                { title: 'Form Data Diri', ext: '.pdf', icon: UserCheck, color: 'text-emerald-600', bg: 'bg-emerald-50', link: 'https://drive.google.com/file/d/1rk03JZLSL5FPKVr2vcYyVWwjwSbAJCwB/view?usp=sharing' },
+                { title: 'Template NDA', ext: '.pdf', icon: Shield, color: 'text-red-600', bg: 'bg-red-50', link: 'https://drive.google.com/file/d/16FCUFsAd_4BhF5nHDnqkTGDk6BFUcYa3/view?usp=sharing' },
+                { title: 'Surat Keterangan', ext: '.pdf', icon: Award, color: 'text-purple-600', bg: 'bg-purple-50', link: 'https://drive.google.com/file/d/1N65nubrR0Je-pgymMC1KYf8Nrt_NNquP/view?usp=sharing' },
+                { title: 'Form Absensi', ext: '.xlsx', icon: Calendar, color: 'text-orange-600', bg: 'bg-orange-50', link: 'https://docs.google.com/spreadsheets/d/1BobGrmNxjjZpE4cJrt4D2a0qO0wm2wpF/edit?usp=sharing&ouid=100646543092328282413&rtpof=true&sd=true' },
               ].map((tmpl, i) => (
-                <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col items-center text-center group cursor-pointer" onClick={() => alert(`Fitur unduh: ${tmpl.title} akan diintegrasikan dengan backend.`)}>
+                <div key={i} className="bg-white p-5 rounded-2xl border border-slate-200/60 shadow-sm hover:shadow-md hover:border-blue-200 transition-all flex flex-col items-center text-center group cursor-pointer" onClick={() => window.open(tmpl.link, '_blank')}>
                   <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 transition-colors ${tmpl.bg} ${tmpl.color} group-hover:bg-blue-600 group-hover:text-white`}>
                     <tmpl.icon className="w-7 h-7" />
                   </div>
                   <h4 className="text-sm font-bold text-slate-800 mb-1">{tmpl.title}</h4>
                   <p className="text-xs text-slate-400 font-mono mb-4">{tmpl.ext}</p>
-                  <div className="mt-auto flex items-center gap-1.5 text-xs font-bold text-blue-600 group-hover:underline"><Download className="w-3.5 h-3.5"/> Download</div>
+                  <div className="mt-auto flex items-center gap-1.5 text-xs font-bold text-blue-600 group-hover:underline"><Download className="w-3.5 h-3.5"/> Download / Akses GDrive</div>
                 </div>
               ))}
             </div>
@@ -977,7 +1016,7 @@ export default function InternshipManagement() {
           <div>
             <div className="mb-6">
               <h3 className="text-lg font-bold text-slate-900">SOP & Alur Program Internship</h3>
-              <p className="text-sm text-slate-500">Panduan detail operasional dan flow penerimaan peserta magang Meratus.</p>
+              <p className="text-sm text-slate-500">Panduan detail operasional dan flow penerimaan peserta magang Meratus yang telah diperbarui.</p>
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 md:p-10">
@@ -1104,56 +1143,85 @@ export default function InternshipManagement() {
         </div>
       )}
 
-      {/* Import Excel */}
+      {/* Import Excel - IMPROVED WITH OVERWRITE EXPLANATION */}
       {isImportModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 md:p-8 border border-slate-100">
-            <h2 className="text-2xl font-extrabold mb-2 text-slate-900">Import Data dari Excel</h2>
-            <p className="text-sm text-slate-500 mb-6">
-              Copy baris dari Excel (Nama, Universitas, Jurusan, Status, dll) lalu Paste ke dalam text area di bawah ini. Pastikan format kolom sesuai dengan template standar Pipeline.
+            <h2 className="text-2xl font-extrabold mb-2 text-slate-900 text-red-600 flex items-center gap-2">
+              <AlertCircle className="w-6 h-6"/> Import Data (OVERWRITE)
+            </h2>
+            <p className="text-sm text-slate-500 mb-4 bg-red-50 p-3 rounded-lg border border-red-100 text-red-800 font-medium">
+              PERHATIAN: Melakukan import akan menghapus SELURUH data intern yang sudah ada di pipeline saat ini, dan menggantinya dengan data baru dari Excel yang Anda paste di bawah ini.
             </p>
             <textarea 
               className="w-full h-64 bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-mono whitespace-pre focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none"
-              placeholder="Paste data excel disini..."
+              placeholder="Paste data excel disini (Nama, Universitas, Jurusan, Status, dll)..."
               value={excelData}
               onChange={(e) => setExcelData(e.target.value)}
             />
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setIsImportModalOpen(false)} className="px-5 py-2.5 text-slate-600 font-semibold hover:bg-slate-100 rounded-xl transition-colors">Batal</button>
-              <button onClick={handleImportExcel} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 shadow-sm transition-colors">Proses Import</button>
+              <button onClick={handleImportExcel} className="px-5 py-2.5 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 shadow-sm transition-colors">Ya, Proses Overwrite</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Add/Edit Intern */}
+      {/* Add/Edit Intern - IMPROVED UI AND VALIDATION */}
       {isInternModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 md:p-8 max-h-[90vh] overflow-y-auto border border-slate-100">
-            <h2 className="text-2xl font-extrabold mb-6 text-slate-900">{editingIntern ? 'Edit Data Intern' : 'Add New Intern'}</h2>
-            <form onSubmit={handleSaveIntern} className="space-y-4">
-              <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Nama Mahasiswa</label><input required name="name" defaultValue={editingIntern?.name} className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Universitas</label><input required name="university" defaultValue={editingIntern?.university} className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
-              <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Jurusan</label><input required name="department" defaultValue={editingIntern?.department} className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1.5">Status Pipeline</label>
-                  <select name="status" defaultValue={editingIntern?.status || 'Process'} className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
-                    <option value="Accepted">Accepted</option>
-                    <option value="Process">Process</option>
-                    <option value="Rejected">Rejected</option>
-                    <option value="Reject Offer">Reject Offer</option>
-                  </select>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 md:p-8 max-h-[90vh] overflow-y-auto border border-slate-100">
+            <h2 className="text-2xl font-extrabold mb-6 text-slate-900 border-b pb-4">{editingIntern ? 'Edit Data Intern' : 'Add New Intern'}</h2>
+            <form onSubmit={handleSaveIntern} className="space-y-6">
+              
+              <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-2"><UserCheck className="w-4 h-4"/> Informasi Pribadi</h3>
+                <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Nama Mahasiswa</label><input required name="name" defaultValue={editingIntern?.name} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Universitas</label><input required name="university" defaultValue={editingIntern?.university} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
+                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Jurusan</label><input required name="department" defaultValue={editingIntern?.department} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
                 </div>
-                <div><label className="block text-sm font-bold text-slate-700 mb-1.5">SBU / SFU</label><input name="group" defaultValue={editingIntern?.group} className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Join Date</label><input type="date" name="joinDate" defaultValue={editingIntern?.joinDate} className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
-                <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Finish Date</label><input type="date" name="finishDate" defaultValue={editingIntern?.finishDate} className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
+
+              <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-2"><Briefcase className="w-4 h-4"/> Status & Penempatan</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Status Pipeline</label>
+                    <select name="status" defaultValue={editingIntern?.status || 'Process'} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                      <option value="Accepted">Accepted</option>
+                      <option value="Process">Process</option>
+                      <option value="Rejected">Rejected</option>
+                      <option value="Reject Offer">Reject Offer</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Status Magang (Bila Diterima)</label>
+                    <select name="internshipStatus" defaultValue={editingIntern?.internshipStatus || 'Active'} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                      <option value="-">- (Belum Diterima)</option>
+                      <option value="Active">Active</option>
+                      <option value="Finish">Finish</option>
+                      <option value="Resigned">Resigned</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">SBU / SFU</label><input name="group" defaultValue={editingIntern?.group} placeholder="Ex: SFU - Human Capital" className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
+                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Nama Mentor</label><input name="supervisor" defaultValue={editingIntern?.supervisor} placeholder="Ex: Andrew Fatah" className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
+                </div>
               </div>
+
+              <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-2"><Calendar className="w-4 h-4"/> Periode Pelaksanaan</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Join Date</label><input type="date" name="joinDate" defaultValue={editingIntern?.joinDate} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
+                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Finish Date</label><input type="date" name="finishDate" defaultValue={editingIntern?.finishDate} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
                 <button type="button" onClick={() => setIsInternModalOpen(false)} className="px-5 py-2.5 text-slate-600 font-semibold hover:bg-slate-100 rounded-xl transition-colors">Batal</button>
-                <button type="submit" className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 shadow-sm transition-colors">Simpan</button>
+                <button type="submit" className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 shadow-sm transition-colors">Simpan Semua Perubahan</button>
               </div>
             </form>
           </div>
