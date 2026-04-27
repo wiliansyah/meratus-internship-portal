@@ -1,4 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { collection, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { db } from './lib/firebase'; // Memanggil koneksi database Firebase
 import { 
   Users, Building2, Calendar, FileText, Search, Plus, Upload, Download,
   BookOpen, Clock, CheckCircle2, XCircle, ArrowUpDown, AlertCircle,
@@ -6,8 +8,7 @@ import {
   Shield, Award, DollarSign, UserCheck, PenTool, ClipboardCheck, Database, Settings
 } from 'lucide-react';
 
-// --- DATA INITIALIZATION ---
-
+// --- DATA INITIALIZATION (Fallback jika Firebase kosong) ---
 const initialInterns = [
   { id: 1, name: 'Ardelia Salma Maharani', university: 'Universitas Airlangga', department: 'D3 Akuntansi', status: 'Accepted', group: 'Trucking', supervisor: 'Dessy Irawati', joinDate: '2025-02-01', finishDate: '2025-04-30', internshipStatus: 'Finish' },
   { id: 2, name: 'Fahmi Herlambang', university: 'Universitas Airlangga', department: 'D3 Akuntansi', status: 'Accepted', group: 'Trucking', supervisor: 'Dessy Irawati', joinDate: '2025-02-01', finishDate: '2025-04-30', internshipStatus: 'Finish' },
@@ -55,7 +56,6 @@ const initialSiteVisits = [
   { id: 2, institution: 'SMK Barunawati', date: '2026-04-10', participants: 30, location: 'Head Office', status: 'Completed' },
 ];
 
-// --- SOP DATA ---
 const defaultInternSOP = [
   { id: 1, icon: 'book', color: 'slate', title: '1. Jenis Internship di Meratus', description: 'Program Internship di Meratus terbagi menjadi beberapa kategori:', bullets: ['Formal Internship Request: Jalur resmi melalui HRBP atau program MBKM (Magang Kampus).', 'Mandiri: Permohonan langsung dari mahasiswa, tidak terikat langsung dengan universitas.', 'Informal Internship Request: Permintaan langsung dari user/manajemen, tidak melalui jalur formal HRBP.'], highlight: 'Referensi Dokumen: "Internship 2025"' },
   { id: 2, icon: 'database', color: 'blue', title: '2. Dokumentasi & Pipeline Internship', description: 'Penerimaan dokumen (melalui email resmi, surat fisik, atau permintaan user) wajib direkap dalam Database/Pipeline Internship. Berfungsi untuk:', bullets: ['Tracking kandidat & intern aktif.', 'Monitoring status (request, interview, accepted, ongoing, completed).', 'Kontrol administrasi program sebagai sumber data pelaporan.'] },
@@ -121,15 +121,57 @@ export default function InternshipManagement() {
   const [activeTab, setActiveTab] = useState<'pipeline' | 'partnerships' | 'visits' | 'guidelines'>('pipeline');
   
   // -- STATES --
-  const [interns, setInterns] = useState(initialInterns);
-  const [contacts, setContacts] = useState(initialContacts);
-  const [schedules, setSchedules] = useState(initialSchedules);
-  const [agreements, setAgreements] = useState(initialAgreements);
-  const [visitContacts, setVisitContacts] = useState(initialVisitContacts);
-  const [siteVisits, setSiteVisits] = useState(initialSiteVisits);
+  const [interns, setInterns] = useState<any[]>(initialInterns);
+  const [contacts, setContacts] = useState<any[]>(initialContacts);
+  const [schedules, setSchedules] = useState<any[]>(initialSchedules);
+  const [agreements, setAgreements] = useState<any[]>(initialAgreements);
+  const [visitContacts, setVisitContacts] = useState<any[]>(initialVisitContacts);
+  const [siteVisits, setSiteVisits] = useState<any[]>(initialSiteVisits);
 
-  const [internSOP, setInternSOP] = useState(defaultInternSOP);
-  const [visitSOP, setVisitSOP] = useState(defaultVisitSOP);
+  const [internSOP, setInternSOP] = useState<any[]>(defaultInternSOP);
+  const [visitSOP, setVisitSOP] = useState<any[]>(defaultVisitSOP);
+
+  // --- FIREBASE REALTIME SYNC ---
+  useEffect(() => {
+    // Subscribe to all collections. If empty, fallback to local initial array visually.
+    const unsubs = [
+      onSnapshot(collection(db, 'interns'), snap => {
+        const data = snap.docs.map(d => d.data() as any).sort((a, b) => b.id - a.id);
+        setInterns(snap.empty ? initialInterns : data);
+      }),
+      onSnapshot(collection(db, 'agreements'), snap => {
+        const data = snap.docs.map(d => d.data() as any).sort((a, b) => b.id - a.id);
+        setAgreements(snap.empty ? initialAgreements : data);
+      }),
+      onSnapshot(collection(db, 'schedules'), snap => {
+        const data = snap.docs.map(d => d.data() as any).sort((a, b) => b.id - a.id);
+        setSchedules(snap.empty ? initialSchedules : data);
+      }),
+      onSnapshot(collection(db, 'contacts'), snap => {
+        const data = snap.docs.map(d => d.data() as any).sort((a, b) => b.id - a.id);
+        setContacts(snap.empty ? initialContacts : data);
+      }),
+      onSnapshot(collection(db, 'siteVisits'), snap => {
+        const data = snap.docs.map(d => d.data() as any).sort((a, b) => b.id - a.id);
+        setSiteVisits(snap.empty ? initialSiteVisits : data);
+      }),
+      onSnapshot(collection(db, 'visitContacts'), snap => {
+        const data = snap.docs.map(d => d.data() as any).sort((a, b) => b.id - a.id);
+        setVisitContacts(snap.empty ? initialVisitContacts : data);
+      }),
+      onSnapshot(collection(db, 'internSOP'), snap => {
+        const data = snap.docs.map(d => d.data() as any).sort((a, b) => a.id - b.id);
+        setInternSOP(snap.empty ? defaultInternSOP : data);
+      }),
+      onSnapshot(collection(db, 'visitSOP'), snap => {
+        const data = snap.docs.map(d => d.data() as any).sort((a, b) => a.id - b.id);
+        setVisitSOP(snap.empty ? defaultVisitSOP : data);
+      })
+    ];
+
+    // Cleanup listeners on unmount
+    return () => unsubs.forEach(unsub => unsub());
+  }, []);
 
   // Pipeline Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -215,9 +257,12 @@ export default function InternshipManagement() {
     setSortConfig({ key, direction: sortConfig?.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
   };
 
-  const handleImportExcel = () => {
+  // --- FIREBASE CRUD HANDLERS ---
+
+  const handleImportExcel = async () => {
     const rows = excelData.trim().split('\n');
     if (rows.length < 2) return alert('Format tidak valid. Pastikan ada baris data selain header.');
+    
     const newInterns = rows.slice(1).map((row, index) => {
       const cols = row.split('\t');
       return {
@@ -227,11 +272,15 @@ export default function InternshipManagement() {
         joinDate: cols[7] || '-', finishDate: cols[8] || '-', internshipStatus: cols[9] || '-'
       };
     });
-    setInterns([...newInterns, ...interns]);
-    setIsImportModalOpen(false); setExcelData('');
+
+    for (const intern of newInterns) {
+      await setDoc(doc(db, 'interns', intern.id.toString()), intern);
+    }
+    setIsImportModalOpen(false); 
+    setExcelData('');
   };
 
-  const handleSaveIntern = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveIntern = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
@@ -242,11 +291,11 @@ export default function InternshipManagement() {
       joinDate: formData.get('joinDate') as string || '-', finishDate: formData.get('finishDate') as string || '-',
       internshipStatus: formData.get('internshipStatus') as string || '-'
     };
-    editingIntern ? setInterns(interns.map(i => i.id === data.id ? data : i)) : setInterns([data, ...interns]);
+    
+    await setDoc(doc(db, 'interns', data.id.toString()), data);
     setIsInternModalOpen(false);
   };
 
-  // --- PARTNERSHIPS LOGIC ---
   const [partnerSubTab, setPartnerSubTab] = useState<'agreements' | 'schedules' | 'contacts'>('agreements');
   const [contactSearch, setContactSearch] = useState('');
 
@@ -259,7 +308,7 @@ export default function InternshipManagement() {
 
   const filteredContacts = contacts.filter(c => c.name.toLowerCase().includes(contactSearch.toLowerCase()) || c.institution.toLowerCase().includes(contactSearch.toLowerCase()));
 
-  const handleSaveAgreement = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveAgreement = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
@@ -268,11 +317,12 @@ export default function InternshipManagement() {
       pihak1: formData.get('pihak1') as string, pihak2: formData.get('pihak2') as string,
       tentang: formData.get('tentang') as string, nomor: formData.get('nomor') as string, durasi: formData.get('durasi') as string,
     };
-    editingAgreement ? setAgreements(agreements.map(a => a.id === data.id ? data : a)) : setAgreements([data, ...agreements]);
+    
+    await setDoc(doc(db, 'agreements', data.id.toString()), data);
     setIsAgreementModalOpen(false);
   };
 
-  const handleSaveSchedule = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveSchedule = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const selectedMonths = Array.from({length: 12}, (_, i) => i).filter(i => formData.get(`month_${i}`));
@@ -282,11 +332,12 @@ export default function InternshipManagement() {
       startPeriod: formData.get('startPeriod') as string, notes: formData.get('notes') as string,
       months: selectedMonths
     };
-    editingSchedule ? setSchedules(schedules.map(s => s.id === data.id ? data : s)) : setSchedules([...schedules, data]);
+    
+    await setDoc(doc(db, 'schedules', data.id.toString()), data);
     setIsScheduleModalOpen(false);
   };
 
-  const handleSaveContact = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveContact = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
@@ -294,14 +345,14 @@ export default function InternshipManagement() {
       name: formData.get('name') as string, department: formData.get('department') as string,
       institution: formData.get('institution') as string, contact: formData.get('contact') as string,
     };
-    editingContact ? setContacts(contacts.map(c => c.id === data.id ? data : c)) : setContacts([data, ...contacts]);
+    
+    await setDoc(doc(db, 'contacts', data.id.toString()), data);
     setIsContactModalOpen(false);
   };
 
-  // --- SITE VISITS LOGIC ---
   const [visitSubTab, setVisitSubTab] = useState<'tracker' | 'sop' | 'contacts'>('sop');
   
-  const handleSaveVisit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveVisit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
@@ -309,11 +360,12 @@ export default function InternshipManagement() {
       institution: formData.get('institution') as string, date: formData.get('date') as string,
       participants: Number(formData.get('participants')), location: formData.get('location') as string, status: formData.get('status') as string,
     };
-    editingVisit ? setSiteVisits(siteVisits.map(v => v.id === data.id ? data : v)) : setSiteVisits([data, ...siteVisits]);
+    
+    await setDoc(doc(db, 'siteVisits', data.id.toString()), data);
     setIsVisitModalOpen(false);
   };
 
-  const handleSaveVisitContact = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveVisitContact = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
@@ -321,12 +373,12 @@ export default function InternshipManagement() {
       name: formData.get('name') as string, position: formData.get('position') as string,
       relatedTo: formData.get('relatedTo') as string, notes: formData.get('notes') as string,
     };
-    editingVisitContact ? setVisitContacts(visitContacts.map(c => c.id === data.id ? data : c)) : setVisitContacts([data, ...visitContacts]);
+    
+    await setDoc(doc(db, 'visitContacts', data.id.toString()), data);
     setIsVisitContactModalOpen(false);
   };
 
-  // --- SOP LOGIC (EDIT) ---
-  const handleSaveSOP = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveSOP = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const bulletsRaw = formData.get('bullets') as string;
@@ -340,22 +392,33 @@ export default function InternshipManagement() {
     };
     if (!editingSop.subSections) updatedSOP.bullets = bullets;
 
-    if (editingSopType === 'intern') setInternSOP(internSOP.map(s => s.id === editingSop.id ? updatedSOP : s));
-    else setVisitSOP(visitSOP.map(s => s.id === editingSop.id ? updatedSOP : s));
+    const collectionName = editingSopType === 'intern' ? 'internSOP' : 'visitSOP';
+    await setDoc(doc(db, collectionName, updatedSOP.id.toString()), updatedSOP);
+    
     setIsSopModalOpen(false);
   };
 
-  // --- UNIVERSAL DELETE ---
-  const executeDelete = () => {
+  // --- UNIVERSAL FIREBASE DELETE ---
+  const executeDelete = async () => {
     if (!itemToDelete) return;
     const { type, id } = itemToDelete;
-    if (type === 'intern') setInterns(interns.filter(i => i.id !== id));
-    if (type === 'agreement') setAgreements(agreements.filter(a => a.id !== id));
-    if (type === 'schedule') setSchedules(schedules.filter(s => s.id !== id));
-    if (type === 'contact') setContacts(contacts.filter(c => c.id !== id));
-    if (type === 'visit') setSiteVisits(siteVisits.filter(v => v.id !== id));
-    if (type === 'visitContact') setVisitContacts(visitContacts.filter(vc => vc.id !== id));
-    setItemToDelete(null);
+    
+    const collectionMap: Record<string, string> = {
+      intern: 'interns',
+      agreement: 'agreements',
+      schedule: 'schedules',
+      contact: 'contacts',
+      visit: 'siteVisits',
+      visitContact: 'visitContacts'
+    };
+
+    try {
+      await deleteDoc(doc(db, collectionMap[type], id.toString()));
+      setItemToDelete(null);
+    } catch (error) {
+      console.error("Error deleting document: ", error);
+      alert("Gagal menghapus data dari server.");
+    }
   };
 
   return (
