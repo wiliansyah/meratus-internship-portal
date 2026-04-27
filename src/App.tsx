@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   Users, Building2, Calendar, FileText, Search, Plus, Upload, Download,
   BookOpen, Clock, CheckCircle2, XCircle, ArrowUpDown, AlertCircle,
-  Edit2, Trash2, MapPin, CheckSquare, ListTodo, Presentation, HardHat, Camera,
+  Edit2, Trash2, MapPin, ListTodo, Presentation, Camera,
   Shield, Award, DollarSign, UserCheck, PenTool, ClipboardCheck, Database, Settings
 } from 'lucide-react';
 
