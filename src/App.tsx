@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, query } from 'firebase/firestore';
 import { 
   Users, Building2, Calendar, FileText, Search, Plus, Upload, Download,
@@ -9,7 +9,7 @@ import {
   Shield, Award, DollarSign, UserCheck, PenTool, ClipboardCheck, Database, Settings, Briefcase, DownloadCloud
 } from 'lucide-react';
 
-// --- MOCK COMPONENTS & FIREBASE SETUP FOR PREVIEW ---
+// --- MOCK COMPONENTS ---
 const AIAssistant = () => (
   <div className="mt-8 p-6 bg-slate-100 rounded-2xl border border-slate-200 border-dashed text-center">
     <h3 className="text-slate-700 font-bold mb-2">AI Assistant Module</h3>
@@ -17,21 +17,23 @@ const AIAssistant = () => (
   </div>
 );
 
-// Setup Firebase Dummy agar tidak terjadi error compile karena ./lib/firebase tidak ada
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-  apiKey: "demo", authDomain: "demo", projectId: "demo"
+// --- FIREBASE CONFIGURATION (Milik User) ---
+const firebaseConfig = {
+  apiKey: "AIzaSyAgZUtc5aZguYz_MW5zISkuLvDgPmDixfg",
+  authDomain: "meratus-frd-lms-10276.firebaseapp.com",
+  projectId: "meratus-frd-lms-10276",
+  storageBucket: "meratus-frd-lms-10276.firebasestorage.app",
+  messagingSenderId: "845694770386",
+  appId: "1:845694770386:web:f103c31b21d082c8fd610b",
+  measurementId: "G-KEV4HZQ53M"
 };
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-let app, db, auth;
-try {
-  app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-  auth = getAuth(app);
-} catch (error) {
-  console.warn("Firebase initialization skipped for preview.");
-}
 
-// --- DATA INITIALIZATION (Fallback jika Firebase kosong/tidak terhubung) ---
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+// --- DATA INITIALIZATION (Fallback sebelum data dari Firebase termuat) ---
 const initialInterns = [
   { id: 1, name: 'Ardelia Salma Maharani', nim: '152010383', university: 'Universitas Airlangga', department: 'D3 Akuntansi', status: 'Accepted', group: 'Trucking', supervisor: 'Dessy Irawati', joinDate: '2025-02-01', finishDate: '2025-04-30', internshipStatus: 'Finish', source: 'system' },
   { id: 2, name: 'Fahmi Herlambang', nim: '152010401', university: 'Universitas Airlangga', department: 'D3 Akuntansi', status: 'Accepted', group: 'Trucking', supervisor: 'Dessy Irawati', joinDate: '2025-02-01', finishDate: '2025-04-30', internshipStatus: 'Finish', source: 'system' },
@@ -144,7 +146,6 @@ const getStatusBadge = (status) => {
 
 export default function InternshipManagement() {
   const [activeTab, setActiveTab] = useState('pipeline');
-  const [user, setUser] = useState(null);
   
   // -- STATES --
   const [interns, setInterns] = useState(initialInterns);
@@ -159,71 +160,63 @@ export default function InternshipManagement() {
 
   // --- FIREBASE AUTH ---
   useEffect(() => {
-    if (!auth) return;
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (error) {
-        console.error("Auth error:", error);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
-    return () => unsubscribe();
+    // Log in anonymously to ensure Firebase lets us connect smoothly
+    signInAnonymously(auth).catch(console.error);
   }, []);
-
-  // --- FIREBASE HELPER PATHS ---
-  const getPublicCollection = (colName) => collection(db, 'artifacts', appId, 'public', 'data', colName);
-  const getPublicDoc = (colName, docId) => doc(db, 'artifacts', appId, 'public', 'data', colName, docId);
 
   // --- FIREBASE REALTIME SYNC ---
   useEffect(() => {
-    if (!db || db.type === 'dummy' || !user) return; 
+    if (!db) return; 
     
     try {
       const unsubs = [
-        onSnapshot(getPublicCollection('interns'), snap => {
-          const data = snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id);
-          setInterns(snap.empty ? initialInterns : data);
+        onSnapshot(collection(db, 'interns'), snap => {
+          if (!snap.empty) setInterns(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
-        onSnapshot(getPublicCollection('agreements'), snap => {
-          const data = snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id);
-          setAgreements(snap.empty ? initialAgreements : data);
+        onSnapshot(collection(db, 'agreements'), snap => {
+          if (!snap.empty) setAgreements(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
-        onSnapshot(getPublicCollection('schedules'), snap => {
-          const data = snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id);
-          setSchedules(snap.empty ? initialSchedules : data);
+        onSnapshot(collection(db, 'schedules'), snap => {
+          if (!snap.empty) setSchedules(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
-        onSnapshot(getPublicCollection('contacts'), snap => {
-          const data = snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id);
-          setContacts(snap.empty ? initialContacts : data);
+        onSnapshot(collection(db, 'contacts'), snap => {
+          if (!snap.empty) setContacts(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
-        onSnapshot(getPublicCollection('siteVisits'), snap => {
-          const data = snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id);
-          setSiteVisits(snap.empty ? initialSiteVisits : data);
+        onSnapshot(collection(db, 'siteVisits'), snap => {
+          if (!snap.empty) setSiteVisits(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
-        onSnapshot(getPublicCollection('visitContacts'), snap => {
-          const data = snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id);
-          setVisitContacts(snap.empty ? initialVisitContacts : data);
+        onSnapshot(collection(db, 'visitContacts'), snap => {
+          if (!snap.empty) setVisitContacts(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
-        onSnapshot(getPublicCollection('internSOP'), snap => {
-          const data = snap.docs.map(d => d.data()).sort((a, b) => a.id - b.id);
-          setInternSOP(snap.empty ? defaultInternSOP : data);
+        onSnapshot(collection(db, 'internSOP'), snap => {
+          if (!snap.empty) setInternSOP(snap.docs.map(d => d.data()).sort((a, b) => a.id - b.id));
         }, err => console.error(err)),
-        onSnapshot(getPublicCollection('visitSOP'), snap => {
-          const data = snap.docs.map(d => d.data()).sort((a, b) => a.id - b.id);
-          setVisitSOP(snap.empty ? defaultVisitSOP : data);
+        onSnapshot(collection(db, 'visitSOP'), snap => {
+          if (!snap.empty) setVisitSOP(snap.docs.map(d => d.data()).sort((a, b) => a.id - b.id));
         }, err => console.error(err))
       ];
+
+      // Insert Initial Data to Firebase if collections are empty (one-time setup)
+      const initializeFirebaseData = async () => {
+        const checkRef = await getDocs(collection(db, 'interns'));
+        if (checkRef.empty) {
+          initialInterns.forEach(i => setDoc(doc(db, 'interns', i.id.toString()), i));
+          initialAgreements.forEach(i => setDoc(doc(db, 'agreements', i.id.toString()), i));
+          initialSchedules.forEach(i => setDoc(doc(db, 'schedules', i.id.toString()), i));
+          initialContacts.forEach(i => setDoc(doc(db, 'contacts', i.id.toString()), i));
+          initialSiteVisits.forEach(i => setDoc(doc(db, 'siteVisits', i.id.toString()), i));
+          initialVisitContacts.forEach(i => setDoc(doc(db, 'visitContacts', i.id.toString()), i));
+          defaultInternSOP.forEach(i => setDoc(doc(db, 'internSOP', i.id.toString()), i));
+          defaultVisitSOP.forEach(i => setDoc(doc(db, 'visitSOP', i.id.toString()), i));
+        }
+      };
+      initializeFirebaseData();
+
       return () => unsubs.forEach(unsub => unsub());
     } catch (e) {
-      console.log("Using local state fallback due to Firebase config absence.");
+      console.log("Firebase sync warning:", e);
     }
-  }, [user]);
+  }, []);
 
   // Pipeline Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -476,9 +469,9 @@ export default function InternshipManagement() {
         return [...newImportedInterns, ...manualInterns];
       });
 
-      // Coba update Firebase
-      if (user && db && db.type !== 'dummy') {
-        const internsRef = getPublicCollection('interns');
+      // Coba update Firebase langsung
+      if (db) {
+        const internsRef = collection(db, 'interns');
         const q = query(internsRef);
         const querySnapshot = await getDocs(q);
         const batch = writeBatch(db);
@@ -492,7 +485,7 @@ export default function InternshipManagement() {
 
         // Tulis data import yang baru
         newImportedInterns.forEach(intern => {
-          const docRef = getPublicDoc('interns', intern.id.toString());
+          const docRef = doc(db, 'interns', intern.id.toString());
           batch.set(docRef, intern);
         });
 
@@ -531,8 +524,8 @@ export default function InternshipManagement() {
       return [data, ...prev];
     });
 
-    if (user && db && db.type !== 'dummy') {
-      try { await setDoc(getPublicDoc('interns', data.id.toString()), data); } catch (e) { console.error(e) }
+    if (db) {
+      try { await setDoc(doc(db, 'interns', data.id.toString()), data); } catch (e) { console.error(e) }
     }
     setIsInternModalOpen(false);
   };
@@ -560,8 +553,8 @@ export default function InternshipManagement() {
     };
     
     setAgreements(prev => editingAgreement ? prev.map(i => i.id === data.id ? data : i) : [data, ...prev]);
-    if (user && db && db.type !== 'dummy') {
-      try { await setDoc(getPublicDoc('agreements', data.id.toString()), data); } catch (e) { console.error(e) }
+    if (db) {
+      try { await setDoc(doc(db, 'agreements', data.id.toString()), data); } catch (e) { console.error(e) }
     }
     setIsAgreementModalOpen(false);
   };
@@ -578,8 +571,8 @@ export default function InternshipManagement() {
     };
     
     setSchedules(prev => editingSchedule ? prev.map(i => i.id === data.id ? data : i) : [data, ...prev]);
-    if (user && db && db.type !== 'dummy') {
-      try { await setDoc(getPublicDoc('schedules', data.id.toString()), data); } catch (e) { console.error(e) }
+    if (db) {
+      try { await setDoc(doc(db, 'schedules', data.id.toString()), data); } catch (e) { console.error(e) }
     }
     setIsScheduleModalOpen(false);
   };
@@ -594,8 +587,8 @@ export default function InternshipManagement() {
     };
     
     setContacts(prev => editingContact ? prev.map(i => i.id === data.id ? data : i) : [data, ...prev]);
-    if (user && db && db.type !== 'dummy') {
-      try { await setDoc(getPublicDoc('contacts', data.id.toString()), data); } catch (e) { console.error(e) }
+    if (db) {
+      try { await setDoc(doc(db, 'contacts', data.id.toString()), data); } catch (e) { console.error(e) }
     }
     setIsContactModalOpen(false);
   };
@@ -612,8 +605,8 @@ export default function InternshipManagement() {
     };
     
     setSiteVisits(prev => editingVisit ? prev.map(i => i.id === data.id ? data : i) : [data, ...prev]);
-    if (user && db && db.type !== 'dummy') {
-      try { await setDoc(getPublicDoc('siteVisits', data.id.toString()), data); } catch (e) { console.error(e) }
+    if (db) {
+      try { await setDoc(doc(db, 'siteVisits', data.id.toString()), data); } catch (e) { console.error(e) }
     }
     setIsVisitModalOpen(false);
   };
@@ -628,8 +621,8 @@ export default function InternshipManagement() {
     };
     
     setVisitContacts(prev => editingVisitContact ? prev.map(i => i.id === data.id ? data : i) : [data, ...prev]);
-    if (user && db && db.type !== 'dummy') {
-      try { await setDoc(getPublicDoc('visitContacts', data.id.toString()), data); } catch (e) { console.error(e) }
+    if (db) {
+      try { await setDoc(doc(db, 'visitContacts', data.id.toString()), data); } catch (e) { console.error(e) }
     }
     setIsVisitContactModalOpen(false);
   };
@@ -662,10 +655,10 @@ export default function InternshipManagement() {
       setVisitSOP(prev => editingSop ? prev.map(i => i.id === newId ? updatedSOP : i) : [...prev, updatedSOP]);
     }
 
-    if (user && db && db.type !== 'dummy') {
+    if (db) {
       try { 
         const collectionName = editingSopType === 'intern' ? 'internSOP' : 'visitSOP';
-        await setDoc(getPublicDoc(collectionName, newId.toString()), updatedSOP); 
+        await setDoc(doc(db, collectionName, newId.toString()), updatedSOP); 
       } catch (e) { console.error(e) }
     }
     
@@ -700,8 +693,8 @@ export default function InternshipManagement() {
 
     settersMap[type](prev => prev.filter(i => i.id !== id));
 
-    if (user && db && db.type !== 'dummy') {
-      try { await deleteDoc(getPublicDoc(collectionMap[type], id.toString())); } catch (e) { console.error(e) }
+    if (db) {
+      try { await deleteDoc(doc(db, collectionMap[type], id.toString())); } catch (e) { console.error(e) }
     }
 
     setItemToDelete(null);
