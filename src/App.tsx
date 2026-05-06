@@ -160,7 +160,6 @@ export default function InternshipManagement() {
 
   // --- FIREBASE AUTH ---
   useEffect(() => {
-    // Log in anonymously to ensure Firebase lets us connect smoothly
     signInAnonymously(auth).catch(console.error);
   }, []);
 
@@ -196,19 +195,33 @@ export default function InternshipManagement() {
         }, err => console.error(err))
       ];
 
-      // Insert Initial Data to Firebase if collections are empty (one-time setup)
+      // Insert Initial Data to Firebase: Dipisah agar tiap tabel dicek masing-masing
       const initializeFirebaseData = async () => {
-        const checkRef = await getDocs(collection(db, 'interns'));
-        if (checkRef.empty) {
-          initialInterns.forEach(i => setDoc(doc(db, 'interns', i.id.toString()), i));
-          initialAgreements.forEach(i => setDoc(doc(db, 'agreements', i.id.toString()), i));
-          initialSchedules.forEach(i => setDoc(doc(db, 'schedules', i.id.toString()), i));
-          initialContacts.forEach(i => setDoc(doc(db, 'contacts', i.id.toString()), i));
-          initialSiteVisits.forEach(i => setDoc(doc(db, 'siteVisits', i.id.toString()), i));
-          initialVisitContacts.forEach(i => setDoc(doc(db, 'visitContacts', i.id.toString()), i));
-          defaultInternSOP.forEach(i => setDoc(doc(db, 'internSOP', i.id.toString()), i));
-          defaultVisitSOP.forEach(i => setDoc(doc(db, 'visitSOP', i.id.toString()), i));
-        }
+        const collectionsToInit = [
+          { name: 'interns', data: initialInterns },
+          { name: 'agreements', data: initialAgreements },
+          { name: 'schedules', data: initialSchedules },
+          { name: 'contacts', data: initialContacts },
+          { name: 'siteVisits', data: initialSiteVisits },
+          { name: 'visitContacts', data: initialVisitContacts },
+          { name: 'internSOP', data: defaultInternSOP },
+          { name: 'visitSOP', data: defaultVisitSOP }
+        ];
+
+        await Promise.all(collectionsToInit.map(async ({ name, data }) => {
+          try {
+            const checkRef = await getDocs(collection(db, name));
+            if (checkRef.empty) {
+              const batch = writeBatch(db);
+              data.forEach(item => {
+                batch.set(doc(db, name, item.id.toString()), item);
+              });
+              await batch.commit();
+            }
+          } catch (err) {
+            console.error(`Error initializing ${name}:`, err);
+          }
+        }));
       };
       initializeFirebaseData();
 
@@ -403,7 +416,6 @@ export default function InternshipManagement() {
 
   // --- EXPORT CSV LOGIC ---
   const handleExportCSV = () => {
-    // Format Header Updated to match User's request
     const header = ['NIM', 'Nama', 'Universitas', 'Jurusan', 'Status', 'Acceptance / Rejected Letter', 'Group SBU/SFU', 'Supervisor', 'Join Date', 'Finish Date', 'Internship Status', 'Internship Letter'];
     
     const csvContent = [
@@ -414,13 +426,13 @@ export default function InternshipManagement() {
         `"${i.university}"`, 
         `"${i.department}"`, 
         `"${i.status}"`, 
-        `"-"`, // Placeholder untuk Acceptance Letter
+        `"-"`, 
         `"${i.group}"`, 
         `"${i.supervisor}"`, 
         `"${i.joinDate}"`, 
         `"${i.finishDate}"`, 
         `"${i.internshipStatus}"`,
-        `"-"` // Placeholder untuk Internship Letter
+        `"-"` 
       ].join(','))
     ].join('\n');
 
@@ -435,7 +447,6 @@ export default function InternshipManagement() {
   // --- FIREBASE CRUD HANDLERS ---
 
   const handleImportExcel = async () => {
-    // Menggunakan filter untuk menghilangkan baris kosong
     const rows = excelData.trim().split('\n').filter(r => r.trim() !== '');
     if (rows.length < 2) return alert('Format tidak valid. Pastikan ada baris header dan data.');
     
@@ -452,38 +463,32 @@ export default function InternshipManagement() {
           university: cols[2] || '-', 
           department: cols[3] || '-',
           status: cols[4] || 'Process', 
-          // cols[5] adalah Acceptance/Rejected Letter, kita lewati karena bukan bagian dari state utama
           group: cols[6] || '-', 
           supervisor: cols[7] || '-',
           joinDate: cols[8] || '-', 
           finishDate: cols[9] || '-', 
           internshipStatus: cols[10] || '-',
-          // cols[11] adalah Internship Letter, kita lewati
-          source: 'import' // Penanda data ini dari excel
+          source: 'import' 
         };
       });
 
-      // Update state lokal: Hapus yang 'import', pertahankan yang 'system', lalu gabung yang baru
       setInterns(prev => {
         const manualInterns = prev.filter(i => i.source !== 'import');
         return [...newImportedInterns, ...manualInterns];
       });
 
-      // Coba update Firebase langsung
       if (db) {
         const internsRef = collection(db, 'interns');
         const q = query(internsRef);
         const querySnapshot = await getDocs(q);
         const batch = writeBatch(db);
         
-        // Hanya hapus dokumen yang sourcenya 'import' di database
         querySnapshot.forEach((document) => {
           if (document.data().source === 'import') {
              batch.delete(document.ref);
           }
         });
 
-        // Tulis data import yang baru
         newImportedInterns.forEach(intern => {
           const docRef = doc(db, 'interns', intern.id.toString());
           batch.set(docRef, intern);
@@ -516,7 +521,7 @@ export default function InternshipManagement() {
       joinDate: formData.get('joinDate') || '-', 
       finishDate: formData.get('finishDate') || '-',
       internshipStatus: formData.get('internshipStatus') || '-',
-      source: editingIntern?.source || 'system' // Tetap pertahankan source
+      source: editingIntern?.source || 'system'
     };
     
     setInterns(prev => {
@@ -644,9 +649,19 @@ export default function InternshipManagement() {
       bullets: bullets,
     };
     
-    // Pertahankan layout subSections jika kita mengedit SOP yang formatnya menggunakan kolom terpisah
+    // Parse Sub-Sections jika user mengedit format JSON untuk menjadi FULLY EDITABLE
     if (editingSop?.subSections) {
-      updatedSOP.subSections = editingSop.subSections;
+      try {
+        const subSecRaw = formData.get('subSections');
+        if (subSecRaw) {
+          updatedSOP.subSections = JSON.parse(subSecRaw);
+        } else {
+          updatedSOP.subSections = editingSop.subSections;
+        }
+      } catch (err) {
+        alert('Format JSON Sub-Sections tidak valid! Silakan perbaiki struktur kurung kurawal/siku.');
+        return; // Jangan save jika JSON error
+      }
     }
 
     if (editingSopType === 'intern') {
@@ -1426,9 +1441,13 @@ export default function InternshipManagement() {
               )}
 
               {currentSop.subSections && (
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-600 font-medium">
-                  <AlertCircle className="w-5 h-5 inline mr-2 text-amber-500 mb-0.5" /> 
-                  SOP ini menggunakan format kolom terpisah (Sub-sections). Untuk mengedit konten list di kolom ini diperlukan akses admin tingkat lanjut. Anda tetap bisa mengubah Judul, Deskripsi, dan Highlight.
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-2">
+                    Sub-Sections Data (Format JSON)
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] rounded-full">Lanjutan</span>
+                  </label>
+                  <p className="text-xs text-slate-500 mb-2">Anda dapat mengedit struktur kolom ganda menggunakan format JSON di bawah ini. Pastikan tidak ada kurung atau koma yang hilang.</p>
+                  <textarea name="subSections" defaultValue={JSON.stringify(currentSop.subSections, null, 2)} className="w-full bg-slate-900 text-green-400 font-mono border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl h-48 outline-none transition-all text-xs" />
                 </div>
               )}
 
