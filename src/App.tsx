@@ -35,12 +35,12 @@ const auth = getAuth(app);
 
 // --- DATA INITIALIZATION (Fallback sebelum data dari Firebase termuat) ---
 const initialInterns = [
-  { id: 1, name: 'Ardelia Salma Maharani', nim: '152010383', university: 'Universitas Airlangga', department: 'D3 Akuntansi', status: 'Accepted', group: 'Trucking', supervisor: 'Dessy Irawati', joinDate: '2025-02-01', finishDate: '2025-04-30', internshipStatus: 'Finish', source: 'system' },
-  { id: 2, name: 'Fahmi Herlambang', nim: '152010401', university: 'Universitas Airlangga', department: 'D3 Akuntansi', status: 'Accepted', group: 'Trucking', supervisor: 'Dessy Irawati', joinDate: '2025-02-01', finishDate: '2025-04-30', internshipStatus: 'Finish', source: 'system' },
-  { id: 3, name: 'Hendrikus Kia Lelaona', nim: '-', university: 'Akademi Maritim Surabaya', department: 'Ketatalaksanaan Pelayaran Niaga dan Kepelabuhan', status: 'Accepted', group: 'Terminal - CLC', supervisor: 'Reni Ruhulessin', joinDate: '2025-02-01', finishDate: '2025-05-01', internshipStatus: 'Finish', source: 'system' },
-  { id: 4, name: 'Surendra', nim: '-', university: 'Institut Teknologi Sepuluh November', department: 'S1 Ilmu Komunikasi', status: 'Accepted', group: 'SFU - Corporate Communication', supervisor: 'Purnama Aditya', joinDate: '2025-01-24', finishDate: '2025-05-21', internshipStatus: 'Finish', source: 'system' },
-  { id: 5, name: 'Ayu Wahyuningtyas', nim: '-', university: 'Universitas Diponegoro', department: 'Manajemen & Administrasi Logistik', status: 'Rejected', group: '-', supervisor: '-', joinDate: '-', finishDate: '-', internshipStatus: '-', source: 'system' },
-  { id: 6, name: 'Nathania Nityasa Palastri', nim: '-', university: 'Institut Teknologi Sepuluh November', department: 'Teknik Transportasi Laut', status: 'Process', group: '-', supervisor: '-', joinDate: '-', finishDate: '-', internshipStatus: '-', source: 'system' }
+  { id: 1, name: 'Ardelia Salma Maharani', nim: '152010383', university: 'Universitas Airlangga', department: 'D3 Akuntansi', status: 'Accepted', group: 'Trucking', supervisor: 'Dessy Irawati', joinDate: '2025-02-01', finishDate: '2025-04-30', internshipStatus: 'Finish', paymentStatus: 'Unpaid', source: 'system' },
+  { id: 2, name: 'Fahmi Herlambang', nim: '152010401', university: 'Universitas Airlangga', department: 'D3 Akuntansi', status: 'Accepted', group: 'Trucking', supervisor: 'Dessy Irawati', joinDate: '2025-02-01', finishDate: '2025-04-30', internshipStatus: 'Finish', paymentStatus: 'Unpaid', source: 'system' },
+  { id: 3, name: 'Hendrikus Kia Lelaona', nim: '-', university: 'Akademi Maritim Surabaya', department: 'Ketatalaksanaan Pelayaran Niaga dan Kepelabuhan', status: 'Accepted', group: 'Terminal - CLC', supervisor: 'Reni Ruhulessin', joinDate: '2025-02-01', finishDate: '2025-05-01', internshipStatus: 'Finish', paymentStatus: 'Unpaid', source: 'system' },
+  { id: 4, name: 'Surendra', nim: '-', university: 'Institut Teknologi Sepuluh November', department: 'S1 Ilmu Komunikasi', status: 'Accepted', group: 'SFU - Corporate Communication', supervisor: 'Purnama Aditya', joinDate: '2025-01-24', finishDate: '2025-05-21', internshipStatus: 'Finish', paymentStatus: 'Unpaid', source: 'system' },
+  { id: 5, name: 'Ayu Wahyuningtyas', nim: '-', university: 'Universitas Diponegoro', department: 'Manajemen & Administrasi Logistik', status: 'Rejected', group: '-', supervisor: '-', joinDate: '-', finishDate: '-', internshipStatus: '-', paymentStatus: '-', source: 'system' },
+  { id: 6, name: 'Nathania Nityasa Palastri', nim: '-', university: 'Institut Teknologi Sepuluh November', department: 'Teknik Transportasi Laut', status: 'Process', group: '-', supervisor: '-', joinDate: '-', finishDate: '-', internshipStatus: '-', paymentStatus: '-', source: 'system' }
 ];
 
 const initialContacts = [
@@ -382,6 +382,7 @@ export default function InternshipManagement() {
     total: interns.length,
     accepted: interns.filter(i => i.status === 'Accepted').length,
     process: interns.filter(i => i.status === 'Process').length,
+    ongoing: interns.filter(i => i.status === 'Accepted' && !isFinished(i)).length,
     rejected: interns.filter(i => i.status === 'Rejected' || i.status === 'Reject Offer').length,
     finishingSoon: interns.filter(i => i.status === 'Accepted' && isFinishingSoon(i.finishDate)).length,
   }), [interns]);
@@ -416,7 +417,7 @@ export default function InternshipManagement() {
 
   // --- EXPORT CSV LOGIC ---
   const handleExportCSV = () => {
-    const header = ['NIM', 'Nama', 'Universitas', 'Jurusan', 'Status', 'Acceptance / Rejected Letter', 'Group SBU/SFU', 'Supervisor', 'Join Date', 'Finish Date', 'Internship Status', 'Internship Letter'];
+    const header = ['NIM', 'Nama', 'Universitas', 'Jurusan', 'Status', 'Acceptance / Rejected Letter', 'Group SBU/SFU', 'Supervisor', 'Join Date', 'Finish Date', 'Internship Status', 'Internship Letter', 'Paid / Unpaid'];
     
     const csvContent = [
       header.join(','),
@@ -432,7 +433,8 @@ export default function InternshipManagement() {
         `"${i.joinDate}"`, 
         `"${i.finishDate}"`, 
         `"${i.internshipStatus}"`,
-        `"-"` 
+        `"-"`,
+        `"${i.paymentStatus || '-'}"`
       ].join(','))
     ].join('\n');
 
@@ -450,7 +452,7 @@ export default function InternshipManagement() {
     const rows = excelData.trim().split('\n').filter(r => r.trim() !== '');
     if (rows.length < 2) return alert('Format tidak valid. Pastikan ada baris header dan data.');
     
-    const confirmOverwrite = window.confirm("Data dari Excel akan di-import. Data hasil import sebelumnya akan ditimpa, namun data yang diinput manual via sistem akan dipertahankan. Lanjutkan?");
+    const confirmOverwrite = window.confirm("Peringatan: Data dari Excel akan di-import. SEMUA data Pipeline sebelumnya akan dihapus dan ditimpa secara total. Lanjutkan?");
     if (!confirmOverwrite) return;
 
     try {
@@ -468,14 +470,12 @@ export default function InternshipManagement() {
           joinDate: cols[8] || '-', 
           finishDate: cols[9] || '-', 
           internshipStatus: cols[10] || '-',
+          paymentStatus: cols[12] || cols[11] || '-', 
           source: 'import' 
         };
       });
 
-      setInterns(prev => {
-        const manualInterns = prev.filter(i => i.source !== 'import');
-        return [...newImportedInterns, ...manualInterns];
-      });
+      setInterns(newImportedInterns); // OVERWRITE SEMUA DATA LOKAL
 
       if (db) {
         const internsRef = collection(db, 'interns');
@@ -483,12 +483,12 @@ export default function InternshipManagement() {
         const querySnapshot = await getDocs(q);
         const batch = writeBatch(db);
         
+        // HAPUS SEMUA DATA SEBELUMNYA DI FIREBASE
         querySnapshot.forEach((document) => {
-          if (document.data().source === 'import') {
-             batch.delete(document.ref);
-          }
+          batch.delete(document.ref);
         });
 
+        // MASUKKAN DATA BARU
         newImportedInterns.forEach(intern => {
           const docRef = doc(db, 'interns', intern.id.toString());
           batch.set(docRef, intern);
@@ -499,7 +499,7 @@ export default function InternshipManagement() {
       
       setIsImportModalOpen(false); 
       setExcelData('');
-      alert('Import berhasil! Data Import ter-update. Data manual tetap aman.');
+      alert('Import berhasil! Semua data Pipeline telah ditimpa dengan data dari Excel.');
     } catch (error) {
       console.error("Gagal melakukan overwrite import: ", error);
       alert("Terjadi kesalahan sistem saat overwrite data.");
@@ -521,6 +521,7 @@ export default function InternshipManagement() {
       joinDate: formData.get('joinDate') || '-', 
       finishDate: formData.get('finishDate') || '-',
       internshipStatus: formData.get('internshipStatus') || '-',
+      paymentStatus: formData.get('paymentStatus') || '-',
       source: editingIntern?.source || 'system'
     };
     
@@ -766,7 +767,7 @@ export default function InternshipManagement() {
             {[
               { label: 'Total Interns', value: pipelineStats.total, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
               { label: 'Accepted', value: pipelineStats.accepted, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-              { label: 'In Process', value: pipelineStats.process, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+              { label: 'Accepted & Ongoing', value: pipelineStats.ongoing, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
               { label: 'Segera Selesai', value: pipelineStats.finishingSoon, icon: AlertCircle, color: 'text-orange-600', bg: 'bg-orange-50' },
               { label: 'Rejected', value: pipelineStats.rejected, icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
             ].map((stat, i) => (
@@ -839,6 +840,7 @@ export default function InternshipManagement() {
                     <th className="px-6 py-4">Mentor</th>
                     <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('joinDate')}><div className="flex items-center gap-2">Join Date <ArrowUpDown className="w-3 h-3 text-slate-400"/></div></th>
                     <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('finishDate')}><div className="flex items-center gap-2">Finish Date <ArrowUpDown className="w-3 h-3 text-slate-400"/></div></th>
+                    <th className="px-6 py-4">Paid/Unpaid</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -872,6 +874,7 @@ export default function InternshipManagement() {
                           </div>
                         ) : '-'}
                       </td>
+                      <td className="px-6 py-4 text-slate-600 font-semibold">{intern.paymentStatus || '-'}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           
@@ -892,7 +895,7 @@ export default function InternshipManagement() {
                       </td>
                     </tr>
                   ))}
-                  {filteredAndSortedInterns.length === 0 && <tr><td colSpan={9} className="px-6 py-12 text-center text-slate-500 font-medium">Tidak ada data intern ditemukan</td></tr>}
+                  {filteredAndSortedInterns.length === 0 && <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-500 font-medium">Tidak ada data intern ditemukan</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -1488,9 +1491,9 @@ export default function InternshipManagement() {
             <h2 className="text-2xl font-extrabold mb-2 text-slate-900 text-blue-600 flex items-center gap-2">
               <Upload className="w-6 h-6"/> Import Pipeline Excel
             </h2>
-            <p className="text-sm text-slate-600 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100 font-medium">
-              <strong className="text-blue-800">Overwrite Terbatas:</strong> Proses ini hanya akan menimpa/update data yang sebelumnya dimasukkan via Import. Data yang Anda tambahkan secara <strong className="text-blue-800">manual (lewat sistem) tidak akan terhapus</strong>. <br/>
-              Pastikan urutan baris Excel Anda sama seperti file yang Anda dapatkan dari "Export CSV" (Nama, NIM, Univ, dst).
+            <p className="text-sm text-slate-600 mb-4 bg-red-50 p-3 rounded-lg border border-red-100 font-medium">
+              <strong className="text-red-800">Peringatan Overwrite (Timpa Data):</strong> Proses ini akan <strong className="text-red-800">MENGHAPUS SEMUA</strong> data Pipeline saat ini dan menggantinya secara total dengan data baru dari Excel. <br/>
+              Pastikan urutan kolom Excel Anda sama dengan format "Export CSV" sistem.
             </p>
             <textarea 
               className="w-full h-64 bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-mono whitespace-pre focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none"
@@ -1500,7 +1503,7 @@ export default function InternshipManagement() {
             />
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setIsImportModalOpen(false)} className="px-5 py-2.5 text-slate-600 font-semibold hover:bg-slate-100 rounded-xl transition-colors">Batal</button>
-              <button onClick={handleImportExcel} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 shadow-sm transition-colors">Proses Import Data</button>
+              <button onClick={handleImportExcel} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 shadow-sm transition-colors">Proses & Timpa Data</button>
             </div>
           </div>
         </div>
@@ -1552,6 +1555,14 @@ export default function InternshipManagement() {
                 <div className="grid grid-cols-2 gap-4">
                   <div><label className="block text-sm font-bold text-slate-700 mb-1.5">SBU / SFU</label><input name="group" defaultValue={editingIntern?.group} placeholder="Ex: SFU - Human Capital" className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
                   <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Nama Mentor</label><input name="supervisor" defaultValue={editingIntern?.supervisor} placeholder="Ex: Andrew Fatah" className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
+                </div>
+                <div className="mt-4">
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5">Opsi Paid / Unpaid</label>
+                  <select name="paymentStatus" defaultValue={editingIntern?.paymentStatus || '-'} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                    <option value="-">-</option>
+                    <option value="Unpaid">Unpaid</option>
+                    <option value="Paid">Paid</option>
+                  </select>
                 </div>
               </div>
 
