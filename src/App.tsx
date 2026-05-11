@@ -349,14 +349,67 @@ export default function InternshipManagement() {
     return diffDays >= 0 && diffDays <= 30;
   };
 
+  // 1. Definisikan state filternya terlebih dahulu sehingga bisa diakses secara berurutan
+  const filteredAndSortedInterns = useMemo(() => {
+    let result = [...interns];
+    if (searchTerm) result = result.filter(intern => intern.name.toLowerCase().includes(searchTerm.toLowerCase()) || intern.university.toLowerCase().includes(searchTerm.toLowerCase()));
+    if (statusFilter !== 'All') result = result.filter(intern => intern.status === statusFilter);
+    if (universityFilter !== 'All') result = result.filter(intern => intern.university === universityFilter);
+    if (sbuFilter !== 'All') result = result.filter(intern => intern.group === sbuFilter);
+    
+    if (timelineFilter !== 'All') {
+      result = result.filter(intern => {
+        if (timelineFilter === 'Incoming') return isIncoming(intern);
+        if (timelineFilter === 'Active') return isActive(intern);
+        if (timelineFilter === 'Finishing Soon') return intern.status === 'Accepted' && isFinishingSoon(intern.finishDate);
+        if (timelineFilter === 'Finished') return isFinished(intern);
+        return true;
+      });
+    }
+    
+    if (sortConfig !== null) {
+      result.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return result;
+  }, [interns, searchTerm, statusFilter, universityFilter, sbuFilter, timelineFilter, sortConfig]);
+
+  // 2. Kalkulasi Dashboard Data Atas agar reaktif terhadap Filter (Memakai filteredAndSortedInterns)
   const pipelineStats = useMemo(() => ({
-    total: interns.length,
-    active: interns.filter(i => isActive(i)).length,
-    incoming: interns.filter(i => isIncoming(i)).length,
-    finished: interns.filter(i => isFinished(i)).length,
-    finishingSoon: interns.filter(i => i.status === 'Accepted' && isFinishingSoon(i.finishDate)).length,
-    rejected: interns.filter(i => i.status === 'Rejected' || i.status === 'Reject Offer').length,
-  }), [interns]);
+    total: filteredAndSortedInterns.length,
+    active: filteredAndSortedInterns.filter(i => isActive(i)).length,
+    incoming: filteredAndSortedInterns.filter(i => isIncoming(i)).length,
+    finished: filteredAndSortedInterns.filter(i => isFinished(i)).length,
+    finishingSoon: filteredAndSortedInterns.filter(i => i.status === 'Accepted' && isFinishingSoon(i.finishDate)).length,
+    rejected: filteredAndSortedInterns.filter(i => i.status === 'Rejected' || i.status === 'Reject Offer').length,
+  }), [filteredAndSortedInterns]);
+
+  // 3. Kalkulasi Dashboard Dept Absorption juga reaktif dan diperhitungkan persentasenya
+  const departmentAbsorption = useMemo(() => {
+    const absorption = {};
+    let maxCount = 0;
+    
+    filteredAndSortedInterns.forEach(intern => {
+      // Hanya tampilkan jika statusnya menandakan penerimaan/keberlangsungan
+      if (intern.status === 'Accepted' || intern.internshipStatus === 'Active' || intern.internshipStatus === 'Finish') {
+        const sbu = intern.group && intern.group !== '-' ? intern.group : 'Unassigned';
+        absorption[sbu] = (absorption[sbu] || 0) + 1;
+        
+        if (absorption[sbu] > maxCount) {
+          maxCount = absorption[sbu];
+        }
+      }
+    });
+    
+    const data = Object.entries(absorption)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count); // Urutkan berdasarkan penyerapan terbanyak
+      
+    return { data, maxCount };
+  }, [filteredAndSortedInterns]);
 
   const requestAdminStats = useMemo(() => ({
     total: internRequests.length,
@@ -418,33 +471,6 @@ export default function InternshipManagement() {
 
     return result;
   }, [internRequests, requestSearchTerm, requestStatusFilter, requestSortConfig]);
-
-  const filteredAndSortedInterns = useMemo(() => {
-    let result = [...interns];
-    if (searchTerm) result = result.filter(intern => intern.name.toLowerCase().includes(searchTerm.toLowerCase()) || intern.university.toLowerCase().includes(searchTerm.toLowerCase()));
-    if (statusFilter !== 'All') result = result.filter(intern => intern.status === statusFilter);
-    if (universityFilter !== 'All') result = result.filter(intern => intern.university === universityFilter);
-    if (sbuFilter !== 'All') result = result.filter(intern => intern.group === sbuFilter);
-    
-    if (timelineFilter !== 'All') {
-      result = result.filter(intern => {
-        if (timelineFilter === 'Incoming') return isIncoming(intern);
-        if (timelineFilter === 'Active') return isActive(intern);
-        if (timelineFilter === 'Finishing Soon') return intern.status === 'Accepted' && isFinishingSoon(intern.finishDate);
-        if (timelineFilter === 'Finished') return isFinished(intern);
-        return true;
-      });
-    }
-    
-    if (sortConfig !== null) {
-      result.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
-    return result;
-  }, [interns, searchTerm, statusFilter, universityFilter, sbuFilter, timelineFilter, sortConfig]);
 
   const handleSort = (key) => {
     setSortConfig({ key, direction: sortConfig?.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
@@ -867,7 +893,7 @@ export default function InternshipManagement() {
           
           <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
             {[
-              { label: 'Total Database', value: pipelineStats.total, icon: Database, color: 'text-slate-600', bg: 'bg-slate-100' },
+              { label: 'Total Sesuai Filter', value: pipelineStats.total, icon: Database, color: 'text-slate-600', bg: 'bg-slate-100' },
               { label: 'Sedang Aktif', value: pipelineStats.active, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
               { label: 'Akan Masuk', value: pipelineStats.incoming, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
               { label: 'Sudah Selesai', value: pipelineStats.finished, icon: Award, color: 'text-purple-600', bg: 'bg-purple-50' },
@@ -884,6 +910,31 @@ export default function InternshipManagement() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Department Absorption Summary */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <Briefcase className="w-5 h-5 text-blue-600"/> Distribusi Penyerapan Intern per Departemen / SBU
+                </h3>
+                <p className="text-xs text-slate-500 font-medium mt-1">Mengikuti filter tabel di bawah. Hanya menghitung status Accepted / Active / Finish.</p>
+              </div>
+            </div>
+            
+            <div className="flex flex-wrap gap-3 pt-2">
+              {departmentAbsorption.data.length > 0 ? departmentAbsorption.data.map((dept, i) => (
+                <div key={i} className="bg-slate-50 hover:bg-blue-50 border border-slate-200/80 rounded-xl px-4 py-3 flex items-center justify-between group shadow-sm flex-auto sm:flex-initial transition-all">
+                  <span className="text-sm font-semibold text-slate-700 mr-4 group-hover:text-blue-700 transition-colors" title={dept.name}>{dept.name}</span>
+                  <span className="bg-white border border-slate-200 text-blue-700 text-sm font-extrabold px-2.5 py-1 rounded-lg shadow-sm">{dept.count}</span>
+                </div>
+              )) : (
+                <div className="text-sm text-slate-500 py-6 text-center w-full bg-slate-50/50 rounded-xl border border-slate-200 border-dashed">
+                  Belum ada data penyerapan intern yang sesuai dengan filter saat ini.
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Search & Actions Toolbar */}
@@ -940,7 +991,7 @@ export default function InternshipManagement() {
                     <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('university')}><div className="flex items-center gap-2">Universitas <ArrowUpDown className="w-3 h-3 text-slate-400"/></div></th>
                     <th className="px-6 py-4">Jurusan</th>
                     <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('status')}><div className="flex items-center gap-2">Status <ArrowUpDown className="w-3 h-3 text-slate-400"/></div></th>
-                    <th className="px-6 py-4">SBU / SFU</th>
+                    <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('group')}><div className="flex items-center gap-2">SBU / SFU <ArrowUpDown className="w-3 h-3 text-slate-400"/></div></th>
                     <th className="px-6 py-4">Mentor</th>
                     <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('joinDate')}><div className="flex items-center gap-2">Join Date <ArrowUpDown className="w-3 h-3 text-slate-400"/></div></th>
                     <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('finishDate')}><div className="flex items-center gap-2">Finish Date <ArrowUpDown className="w-3 h-3 text-slate-400"/></div></th>
