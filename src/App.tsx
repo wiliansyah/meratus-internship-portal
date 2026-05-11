@@ -6,7 +6,8 @@ import {
   Users, Building2, Calendar, FileText, Search, Plus, Upload, Download,
   BookOpen, Clock, CheckCircle2, XCircle, ArrowUpDown, AlertCircle,
   Edit2, Trash2, MapPin, ListTodo, Presentation, Camera,
-  Shield, Award, DollarSign, UserCheck, PenTool, ClipboardCheck, Database, Settings, Briefcase, DownloadCloud
+  Shield, Award, DollarSign, UserCheck, PenTool, ClipboardCheck, Database, Settings, Briefcase, DownloadCloud,
+  Send, Inbox, Lock, Unlock, KeyRound
 } from 'lucide-react';
 
 // --- MOCK COMPONENTS ---
@@ -32,75 +33,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-
-// --- DATA INITIALIZATION (Fallback sebelum data dari Firebase termuat) ---
-const initialInterns = [
-  { id: 1, name: 'Ardelia Salma Maharani', nim: '152010383', university: 'Universitas Airlangga', department: 'D3 Akuntansi', status: 'Accepted', group: 'Trucking', supervisor: 'Dessy Irawati', joinDate: '2025-02-01', finishDate: '2025-04-30', internshipStatus: 'Finish', paymentStatus: 'Unpaid', source: 'system' },
-  { id: 2, name: 'Fahmi Herlambang', nim: '152010401', university: 'Universitas Airlangga', department: 'D3 Akuntansi', status: 'Accepted', group: 'Trucking', supervisor: 'Dessy Irawati', joinDate: '2025-02-01', finishDate: '2025-04-30', internshipStatus: 'Finish', paymentStatus: 'Unpaid', source: 'system' },
-  { id: 3, name: 'Hendrikus Kia Lelaona', nim: '-', university: 'Akademi Maritim Surabaya', department: 'Ketatalaksanaan Pelayaran Niaga dan Kepelabuhan', status: 'Accepted', group: 'Terminal - CLC', supervisor: 'Reni Ruhulessin', joinDate: '2025-02-01', finishDate: '2025-05-01', internshipStatus: 'Finish', paymentStatus: 'Unpaid', source: 'system' },
-  { id: 4, name: 'Surendra', nim: '-', university: 'Institut Teknologi Sepuluh November', department: 'S1 Ilmu Komunikasi', status: 'Accepted', group: 'SFU - Corporate Communication', supervisor: 'Purnama Aditya', joinDate: '2025-01-24', finishDate: '2025-05-21', internshipStatus: 'Finish', paymentStatus: 'Unpaid', source: 'system' },
-  { id: 5, name: 'Ayu Wahyuningtyas', nim: '-', university: 'Universitas Diponegoro', department: 'Manajemen & Administrasi Logistik', status: 'Rejected', group: '-', supervisor: '-', joinDate: '-', finishDate: '-', internshipStatus: '-', paymentStatus: '-', source: 'system' },
-  { id: 6, name: 'Nathania Nityasa Palastri', nim: '-', university: 'Institut Teknologi Sepuluh November', department: 'Teknik Transportasi Laut', status: 'Process', group: '-', supervisor: '-', joinDate: '-', finishDate: '-', internshipStatus: '-', paymentStatus: '-', source: 'system' }
-];
-
-const initialContacts = [
-  { id: 1, name: 'Dian Anggiyatna', department: '-', institution: 'Universitas Ciputra', contact: '6282257035083' },
-  { id: 2, name: 'Devina Felbania', department: '-', institution: 'Universitas Widya Mandala', contact: '0853-8556-3838 / 0822-3263-6117' },
-  { id: 3, name: 'Beny', department: 'Marine engineering, Ship Management', institution: 'ITS', contact: '6282230864567' },
-  { id: 4, name: 'Yoyok Setyo', department: 'Sea Transportation, Operation Liner', institution: 'ITS', contact: '6281335260040' },
-  { id: 5, name: 'Nursery', department: 'Logistics, Business Shipping', institution: 'ITL Trisakti', contact: '6281219897930' },
-  { id: 6, name: 'Nelson', department: 'IT Binus Jkt', institution: 'Binus', contact: '6289628999587' },
-  { id: 7, name: 'Ibu Maria (S2)', department: '-', institution: 'Universitas Tarumanegara', contact: '62895365312694' },
-  { id: 8, name: 'Dewi Retno', department: 'Sekretaris badan kerjasama', institution: 'Universitas Airlangga', contact: '628123521416' },
-  { id: 9, name: 'Bu Fifin', department: 'Fakultas Psikologi', institution: 'Universitas Surabaya', contact: '+62 822-1918-0336' },
-];
-
-const initialSchedules = [
-  { id: 1, institution: 'Ubaya', duration: '4–6 months', startPeriod: 'January and August (or early September)', notes: 'Follows academic calendar. Must conclude at end of semester.', months: [0, 7] },
-  { id: 2, institution: 'PPIT Tiongkok', duration: '6 months (1 Semester)', startPeriod: 'Official: September. Holidays: Jun-Aug, Jan-Feb', notes: 'Official internships are typically for students in Semester 7.', months: [8] },
-  { id: 3, institution: 'ITS', duration: 'KP: 1-2 mos, Magang: 3-6 mos', startPeriod: 'KP: Jan-Feb OR Jul-Aug. Magang: Flexible', notes: 'KP Requires Sem 5+ & 90 SKS. Magang requires Sem 7/8.', months: [0, 1, 6, 7] },
-];
-
-const initialAgreements = [
-  { id: 1, type: 'PKS', status: 'SEDANG BERLANGSUNG', pihak1: 'Fakultas Psikologi Universitas Surabaya', pihak2: 'PT Meratus Line', tentang: 'Pelaksanaan Kerja Sama Tridarma Perguruan Tinggi Bagi Program Studi Pendidikan Profesi Psikologi', nomor: '076/DIR-MRT-LGL/0425', durasi: 'April 2025 - April 2030' },
-  { id: 2, type: 'MOU', status: 'SEDANG BERLANGSUNG', pihak1: 'Institut Teknologi Sepuluh November', pihak2: 'PT Meratus Line', tentang: 'Kerjasama di Bidang Pendidikan, Penelitian, dan Pengabdian Kepada Masyarakat', nomor: '252/RCTA-MoU/0822', durasi: 'Oktober 2022 - Oktober 2027' },
-  { id: 3, type: 'MOU', status: 'SEDANG BERLANGSUNG', pihak1: 'Universitas Ciputra', pihak2: 'PT Meratus Line', tentang: 'Program Kerjasama', nomor: '558/MRT-LGL/1124', durasi: 'November 2024 - November 2029' },
-  { id: 4, type: 'PKS', status: 'TIDAK AKTIF', pihak1: 'Fakultas Psikologi Universitas Surabaya', pihak2: 'PT Meratus Line', tentang: 'Tridharma Perguruan Tinggi Merdeka Belajar Kampus Merdeka', nomor: '035/DIR-MRT-LGL/0225', durasi: '2024 - 2025' },
-];
-
-const initialVisitContacts = [
-  { id: 1, name: 'Annisa Maulidya Rahma', position: 'Corporate Communication', relatedTo: 'Event', notes: 'PIC Public Relations, terkadang membantu event internal' },
-  { id: 2, name: 'Darmawan Rinaldi', position: 'Warehouse (WTT)', relatedTo: 'Site Visit', notes: 'Dihubungi ketika ada permintaan visit ke warehouse' },
-  { id: 3, name: 'Reni Ruhulessin', position: 'Depo (DTT)', relatedTo: 'Site Visit', notes: 'Dihubungi ketika ada permintaan visit ke warehouse sekalian depo' },
-  { id: 4, name: 'Yusuf Hidayat', position: 'Depo (DMS)', relatedTo: 'Site Visit', notes: 'Dihubungi ketika ada permintaan visit ke depo (domestik)' },
-  { id: 5, name: 'Kevin Adhi Danudoro', position: 'Depo (DMM)', relatedTo: 'Site Visit', notes: 'Dihubungi ketika ada permintaan visit ke depo (internasional / MLO)' },
-];
-
-const initialSiteVisits = [
-  { id: 1, institution: 'Universitas Ciputra (Logistics)', date: '2026-05-15', participants: 45, location: 'Head Office & Depo DMS', status: 'Planned' },
-  { id: 2, institution: 'SMK Barunawati', date: '2026-04-10', participants: 30, location: 'Head Office', status: 'Completed' },
-];
-
-// SOP INTERN IMPROVED
-const defaultInternSOP = [
-  { id: 1, icon: 'book', color: 'slate', title: '1. Jenis & Ketentuan Internship', description: 'Program Internship di Meratus terbagi menjadi beberapa kategori dan harus dipahami sebelum memproses:', bullets: ['Formal Internship Request: Jalur resmi melalui HRBP atau program MBKM (Magang Kampus), mewajibkan MOU/PKS.', 'Mandiri: Permohonan langsung dari mahasiswa, wajib menyertakan surat pengantar universitas.', 'Informal Request: Permintaan langsung dari user/manajemen, tetap wajib melengkapi form data diri & NDA.'], highlight: 'Referensi Dokumen Kebijakan: "Internship Policy Guideline 2025"' },
-  { id: 2, icon: 'database', color: 'blue', title: '2. Pencatatan Pipeline (Initial Phase)', description: 'Setiap permohonan magang (email/surat/WhatsApp user) wajib langsung masuk ke dalam Database/Pipeline. Langkah:', bullets: ['Input nama, universitas, jurusan.', 'Set status ke "Process".', 'Lampirkan CV dan Surat Pengantar (disimpan di GDrive khusus Internship).'] },
-  { id: 3, icon: 'usercheck', color: 'indigo', title: '3. Konfirmasi User & Proses Interview', description: 'Tim Internship / Learning & Culture melakukan cross-check ketersediaan posisi di SBU/SFU terkait.', subSections: [ { title: 'A. Screening & Interview', bullets: ['Jadwalkan interview bersama user jika diminta.', 'Catat hasil feedback interview (Approved/Rejected).'] }, { title: 'B. Keputusan Final', bullets: ['Update status pipeline menjadi "Accepted" atau "Rejected".', 'Jika Rejected, kirimkan email penolakan standar ke mahasiswa/universitas.'] } ] },
-  { id: 4, icon: 'pen', color: 'amber', title: '4. Administrasi Penerimaan & Legalitas', description: 'Fase kritis sebelum mahasiswa mulai magang. Dokumen wajib diterbitkan dan diselesaikan:', bullets: ['Penerbitan Surat Penerimaan Magang (kirim via email ke Univ, cc mahasiswa).', 'Mahasiswa wajib mengisi dan menandatangani Form Data Diri.', 'Mahasiswa wajib membaca dan menandatangani NDA (Non-Disclosure Agreement) bermaterai.', 'Update join date & finish date di pipeline.'], highlight: 'Akses ID Card / Sistem IT TIDAK AKAN diberikan sebelum NDA ditandatangani.' },
-  { id: 5, icon: 'presentation', color: 'teal', title: '5. Hari Pertama: Onboarding & Handover', description: 'Pada hari H, mahasiswa hadir di Head Office / Site untuk proses induksi:', bullets: ['Pemberian Safety Briefing (terutama untuk penempatan Depo/Warehouse).', 'Pemaparan Company Profile dan Budaya Kerja (Meratus Way).', 'Penjelasan jam kerja, tata tertib, dan sistem absensi (Form Absensi Excel).', 'Handover mahasiswa kepada Supervisor / Mentor terkait.'] },
-  { id: 6, icon: 'clipboard', color: 'purple', title: '6. Monitoring, Evaluasi, & Penyelesaian', description: 'Pengawasan dilakukan secara berkala. Menjelang akhir masa magang, lakukan langkah berikut:', bullets: ['H-14: Reminder kepada Mentor untuk melakukan penilaian performa magang.', 'H-7: Mahasiswa mengumpulkan form absensi yang telah ditandatangani mentor.', 'H-1: Mahasiswa mengembalikan ID Card atau aset perusahaan yang dipinjam (Exit Clearance).', 'Penerbitan Surat Keterangan Magang (Certificate of Completion) sebagai bukti sah telah menyelesaikan magang.'] },
-  { id: 7, icon: 'dollar', color: 'emerald', title: '7. Kebijakan Tunjangan (Allowance)', description: 'Pada prinsipnya magang bersifat Unpaid. Jika ada tunjangan khusus dari unit terkait:', bullets: ['Tunjangan bersumber murni dari budget SBU/SFU yang mengusulkan.', 'Rata-rata tunjangan (jika disetujui) adalah Rp100.000 / kehadiran aktif.', 'Skema 1: Meratus Academy merekap absensi -> diserahkan ke tim Payroll untuk pencairan.', 'Skema 2: Diproses langsung oleh AP SBU/SFU terkait (Intern didaftarkan sebagai vendor/3rd party).'] }
-];
-
-// SOP VISIT IMPROVED
-const defaultVisitSOP = [
-  { id: 1, icon: 'filetext', color: 'blue', title: '1. Inisiasi & Screening Permintaan', description: 'Semua permohonan kunjungan industri (Site Visit) harus dievaluasi kelayakannya.', bullets: ['Terima surat permohonan resmi dari Universitas/Sekolah.', 'Cek ketersediaan jadwal, minimal H-14 dari tanggal pelaksanaan.', 'Pastikan jumlah peserta rasional dengan kapasitas HO/Depo (maksimal 50 orang).'] },
-  { id: 2, icon: 'users', color: 'indigo', title: '2. Koordinasi Internal & Approval', description: 'Penentuan PIC dan penyusunan rundown kasar:', subSections: [ { title: 'Head Office (HO)', bullets: ['Konfirmasi dengan Corp Comm (Bu Annisa) untuk materi Company Profile.', 'Booking ruangan (Café Lt.2 / Meeting Room besar).'] }, { title: 'Site / Depo', bullets: ['Hubungi PIC Depo terkait (DTT/DMS/DMM) untuk izin kunjungan lapangan.', 'Konfirmasi kebutuhan APD (Helm, Rompi, Sepatu Safety).'] } ] },
-  { id: 3, icon: 'settings', color: 'slate', title: '3. Finalisasi & Persiapan Teknis (H-3)', description: 'Memastikan semua operasional logistik siap:', bullets: ['Email undangan resmi balasan ke pihak Universitas beserta rundown final.', 'Briefing internal dengan GA terkait layout ruangan, AC, Mic, dan LCD.', 'Memastikan ketersediaan suvenir perusahaan untuk penyerahan plakat.', 'Koordinasi dengan tim Security HO terkait slot parkir bus/kendaraan rombongan.'] },
-  { id: 4, icon: 'clock', color: 'amber', title: '4. Eksekusi Hari H: Penyambutan', description: 'Pelaksanaan sesi dalam ruangan:', bullets: ['Registrasi peserta dan penukaran Visitor Card.', 'Pembukaan, Safety Briefing ruang tertutup, dan sambutan manajemen.', 'Pemaparan Company Profile dan sesi Q&A.', 'Sesi foto bersama dan penyerahan plakat/suvenir.'] },
-  { id: 5, icon: 'presentation', color: 'teal', title: '5. Eksekusi Hari H: Site Tour', description: 'Jika ada sesi kunjungan lapangan:', bullets: ['Mobilisasi peserta dari HO menuju Depo/Warehouse.', 'Pembagian dan pengecekan pemakaian APD wajib.', 'Tur lapangan dipandu langsung oleh SPV/Manager Site setempat.', 'Pengembalian APD dan Visitor Card sebelum rombongan pulang.'] },
-  { id: 6, icon: 'camera', color: 'purple', title: '6. Post-Event & Reporting', description: 'Tugas administrasi setelah kegiatan selesai:', bullets: ['Upload dokumentasi foto/video ke folder GDrive Corporate.', 'Update status tracker Site Visit menjadi "Completed".', 'Rekap jumlah peserta untuk laporan bulanan Learning & Culture.'] }
-];
 
 // --- ICON RENDERER HELPER ---
 const RenderIcon = ({ name, className }) => {
@@ -134,8 +66,11 @@ const colorClasses = {
 // --- BADGE HELPER ---
 const getStatusBadge = (status) => {
   switch(status) {
-    case 'Accepted': case 'Completed': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    case 'Accepted': case 'Approved': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    case 'Fulfilled': return 'bg-teal-100 text-teal-700 border-teal-200';
+    case 'Completed': return 'bg-purple-100 text-purple-700 border-purple-200';
     case 'Process': case 'Ongoing': return 'bg-amber-100 text-amber-700 border-amber-200';
+    case 'Pending': return 'bg-blue-100 text-blue-700 border-blue-200';
     case 'Rejected': case 'Reject Offer': case 'Cancelled': return 'bg-red-100 text-red-700 border-red-200';
     case 'Planned': return 'bg-blue-100 text-blue-700 border-blue-200';
     case 'SEDANG BERLANGSUNG': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
@@ -145,18 +80,25 @@ const getStatusBadge = (status) => {
 };
 
 export default function InternshipManagement() {
-  const [activeTab, setActiveTab] = useState('pipeline');
-  
-  // -- STATES --
-  const [interns, setInterns] = useState(initialInterns);
-  const [contacts, setContacts] = useState(initialContacts);
-  const [schedules, setSchedules] = useState(initialSchedules);
-  const [agreements, setAgreements] = useState(initialAgreements);
-  const [visitContacts, setVisitContacts] = useState(initialVisitContacts);
-  const [siteVisits, setSiteVisits] = useState(initialSiteVisits);
+  // -- AUTH & GATEKEEPING STATES --
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
 
-  const [internSOP, setInternSOP] = useState(defaultInternSOP);
-  const [visitSOP, setVisitSOP] = useState(defaultVisitSOP);
+  // -- MAIN TABS --
+  const [activeTab, setActiveTab] = useState('requests');
+  
+  // -- DATA STATES (Pure Empty Initialized, Data fully driven by Firebase) --
+  const [interns, setInterns] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [schedules, setSchedules] = useState([]);
+  const [agreements, setAgreements] = useState([]);
+  const [visitContacts, setVisitContacts] = useState([]);
+  const [siteVisits, setSiteVisits] = useState([]);
+  const [internRequests, setInternRequests] = useState([]);
+
+  const [internSOP, setInternSOP] = useState([]);
+  const [visitSOP, setVisitSOP] = useState([]);
 
   // --- FIREBASE AUTH ---
   useEffect(() => {
@@ -187,6 +129,9 @@ export default function InternshipManagement() {
         onSnapshot(collection(db, 'visitContacts'), snap => {
           if (!snap.empty) setVisitContacts(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
+        onSnapshot(collection(db, 'internRequests'), snap => {
+          if (!snap.empty) setInternRequests(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
+        }, err => console.error(err)),
         onSnapshot(collection(db, 'internSOP'), snap => {
           if (!snap.empty) setInternSOP(snap.docs.map(d => d.data()).sort((a, b) => a.id - b.id));
         }, err => console.error(err)),
@@ -195,43 +140,13 @@ export default function InternshipManagement() {
         }, err => console.error(err))
       ];
 
-      // Insert Initial Data to Firebase: Dipisah agar tiap tabel dicek masing-masing
-      const initializeFirebaseData = async () => {
-        const collectionsToInit = [
-          { name: 'interns', data: initialInterns },
-          { name: 'agreements', data: initialAgreements },
-          { name: 'schedules', data: initialSchedules },
-          { name: 'contacts', data: initialContacts },
-          { name: 'siteVisits', data: initialSiteVisits },
-          { name: 'visitContacts', data: initialVisitContacts },
-          { name: 'internSOP', data: defaultInternSOP },
-          { name: 'visitSOP', data: defaultVisitSOP }
-        ];
-
-        await Promise.all(collectionsToInit.map(async ({ name, data }) => {
-          try {
-            const checkRef = await getDocs(collection(db, name));
-            if (checkRef.empty) {
-              const batch = writeBatch(db);
-              data.forEach(item => {
-                batch.set(doc(db, name, item.id.toString()), item);
-              });
-              await batch.commit();
-            }
-          } catch (err) {
-            console.error(`Error initializing ${name}:`, err);
-          }
-        }));
-      };
-      initializeFirebaseData();
-
       return () => unsubs.forEach(unsub => unsub());
     } catch (e) {
       console.log("Firebase sync warning:", e);
     }
   }, []);
 
-  // Pipeline Filters
+  // -- PIPELINE FILTERS --
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [universityFilter, setUniversityFilter] = useState('All');
@@ -239,7 +154,13 @@ export default function InternshipManagement() {
   const [timelineFilter, setTimelineFilter] = useState('All');
   const [sortConfig, setSortConfig] = useState(null);
   
-  // Modals
+  // -- REQUESTS TAB FILTER --
+  const [requestSubTab, setRequestSubTab] = useState('portal');
+  const [requestSearchTerm, setRequestSearchTerm] = useState('');
+  const [requestStatusFilter, setRequestStatusFilter] = useState('All');
+  const [requestSortConfig, setRequestSortConfig] = useState('Urgent');
+
+  // -- MODALS --
   const [isInternModalOpen, setIsInternModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingIntern, setEditingIntern] = useState(null);
@@ -261,6 +182,25 @@ export default function InternshipManagement() {
   const [editingSopType, setEditingSopType] = useState('intern');
 
   const [itemToDelete, setItemToDelete] = useState(null);
+
+  // --- ADMIN LOGIN LOGIC ---
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (passwordInput === 'MeratusAcademy') {
+      setIsAdmin(true);
+      setIsLoginModalOpen(false);
+      setPasswordInput('');
+      setActiveTab('pipeline'); // Arahkan admin langsung ke pipeline setelah login
+    } else {
+      alert("Password salah. Akses ditolak.");
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAdmin(false);
+    setActiveTab('requests');
+    setRequestSubTab('portal');
+  };
 
   // --- DYNAMIC JSPDF LOADER ---
   const loadJsPDF = async () => {
@@ -310,7 +250,6 @@ export default function InternshipManagement() {
 
       // Header Section
       doc.text(`No.: ${docNumber}`, margin, y); 
-      // Rata Kanan untuk Tanggal (A4 width approx 210, right margin 25 -> x=185)
       doc.text(`Surabaya, ${todayFormatted}`, 185, y, { align: 'right' });
       
       y += 8;
@@ -325,13 +264,13 @@ export default function InternshipManagement() {
       doc.text(`Dengan hormat,`, margin, y); y += 8;
       doc.text(`Bersama ini kami menyampaikan bahwa:`, margin, y); y += 10;
 
-      // Identity Section (Membuat rata titik dua)
+      // Identity Section
       doc.text(`Nama`, margin + 10, y);
       doc.text(`: ${intern.name}`, margin + 35, y); y += 7;
       doc.text(`NIM/NIS`, margin + 10, y);
       doc.text(`: ${intern.nim || '-'}`, margin + 35, y); y += 12;
 
-      // Content Sentences with Justify (Membuat Text Rata Kanan Kiri)
+      // Content Sentences
       const body1 = `telah melakukan program magang di PT. Meratus Line dengan penempatan di departemen ${intern.group} terhitung sejak tanggal ${joinStr} - ${finishStr}.`;
       doc.text(body1, margin, y, { maxWidth: 160, align: 'justify' });
       y += (doc.splitTextToSize(body1, 160).length * 6) + 4;
@@ -361,9 +300,31 @@ export default function InternshipManagement() {
     }
   };
 
-  // --- PIPELINE LOGIC ---
+  // --- PIPELINE TIMELINE LOGIC ---
   const uniqueUniversities = useMemo(() => Array.from(new Set(interns.map(i => i.university))).filter(u => u !== '-'), [interns]);
   const uniqueSBUs = useMemo(() => Array.from(new Set(interns.map(i => i.group))).filter(g => g !== '-'), [interns]);
+
+  const todayZero = new Date();
+  todayZero.setHours(0,0,0,0);
+
+  const isFinished = (intern) => {
+    if (intern.internshipStatus === 'Finish') return true;
+    if (!intern.finishDate || intern.finishDate === '-') return false;
+    return new Date(intern.finishDate) < todayZero;
+  };
+
+  const isIncoming = (intern) => {
+    if (intern.status !== 'Accepted') return false;
+    if (!intern.joinDate || intern.joinDate === '-') return false;
+    return new Date(intern.joinDate) > todayZero;
+  };
+
+  const isActive = (intern) => {
+    if (intern.status !== 'Accepted') return false;
+    if (isFinished(intern)) return false;
+    if (isIncoming(intern)) return false;
+    return true;
+  };
 
   const isFinishingSoon = (finishDateStr) => {
     if (!finishDateStr || finishDateStr === '-') return false;
@@ -372,20 +333,78 @@ export default function InternshipManagement() {
     return diffDays >= 0 && diffDays <= 30;
   };
 
-  const isFinished = (intern) => {
-    if (intern.internshipStatus === 'Finish') return true;
-    if (!intern.finishDate || intern.finishDate === '-') return false;
-    return new Date(intern.finishDate) < new Date();
-  };
-
   const pipelineStats = useMemo(() => ({
     total: interns.length,
-    accepted: interns.filter(i => i.status === 'Accepted').length,
-    process: interns.filter(i => i.status === 'Process').length,
-    ongoing: interns.filter(i => i.status === 'Accepted' && !isFinished(i)).length,
-    rejected: interns.filter(i => i.status === 'Rejected' || i.status === 'Reject Offer').length,
+    active: interns.filter(i => isActive(i)).length,
+    incoming: interns.filter(i => isIncoming(i)).length,
+    finished: interns.filter(i => isFinished(i)).length,
     finishingSoon: interns.filter(i => i.status === 'Accepted' && isFinishingSoon(i.finishDate)).length,
+    rejected: interns.filter(i => i.status === 'Rejected' || i.status === 'Reject Offer').length,
   }), [interns]);
+
+  const requestAdminStats = useMemo(() => ({
+    total: internRequests.length,
+    pending: internRequests.filter(r => r.status === 'Pending').length,
+    approved: internRequests.filter(r => r.status === 'Approved').length,
+    rejected: internRequests.filter(r => r.status === 'Rejected').length,
+    fulfilled: internRequests.filter(r => r.status === 'Fulfilled').length,
+    completed: internRequests.filter(r => r.status === 'Completed').length,
+  }), [internRequests]);
+
+  const filteredAndSortedRequests = useMemo(() => {
+    let result = [...internRequests];
+
+    if (requestSearchTerm) {
+      const lowerSearch = requestSearchTerm.toLowerCase();
+      result = result.filter(req => 
+        req.requester.toLowerCase().includes(lowerSearch) || 
+        req.sbu.toLowerCase().includes(lowerSearch) ||
+        req.location.toLowerCase().includes(lowerSearch)
+      );
+    }
+
+    if (requestStatusFilter !== 'All') {
+      result = result.filter(req => req.status === requestStatusFilter);
+    }
+
+    result.sort((a, b) => {
+      if (requestSortConfig === 'Newest') {
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      } else if (requestSortConfig === 'Oldest') {
+        return new Date(a.createdAt) - new Date(b.createdAt);
+      } else if (requestSortConfig === 'Urgent') {
+        const parseDate = (str) => {
+           if (!str) return 9999999999999;
+           const lowerStr = str.toLowerCase();
+           if (lowerStr.includes('asap') || lowerStr.includes('segera') || lowerStr.includes('urgent')) return 0;
+
+           const months = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5, 'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11 };
+           let month = 11;
+           let year = 2099;
+           
+           const yearMatch = lowerStr.match(/20\d{2}/);
+           if (yearMatch) year = parseInt(yearMatch[0]);
+
+           for (const [mName, mNum] of Object.entries(months)) {
+             if (lowerStr.includes(mName)) {
+               month = mNum;
+               break;
+             }
+           }
+           return new Date(year, month, 1).getTime();
+        };
+
+        const dateA = parseDate(a.timeline);
+        const dateB = parseDate(b.timeline);
+        
+        if (dateA !== dateB) return dateA - dateB;
+        return new Date(a.createdAt) - new Date(b.createdAt);
+      }
+      return 0;
+    });
+
+    return result;
+  }, [internRequests, requestSearchTerm, requestStatusFilter, requestSortConfig]);
 
   const filteredAndSortedInterns = useMemo(() => {
     let result = [...interns];
@@ -393,14 +412,17 @@ export default function InternshipManagement() {
     if (statusFilter !== 'All') result = result.filter(intern => intern.status === statusFilter);
     if (universityFilter !== 'All') result = result.filter(intern => intern.university === universityFilter);
     if (sbuFilter !== 'All') result = result.filter(intern => intern.group === sbuFilter);
+    
     if (timelineFilter !== 'All') {
       result = result.filter(intern => {
-        if (timelineFilter === 'Finishing Soon') return isFinishingSoon(intern.finishDate);
-        if (timelineFilter === 'Active') return intern.status === 'Accepted' && !isFinished(intern);
+        if (timelineFilter === 'Incoming') return isIncoming(intern);
+        if (timelineFilter === 'Active') return isActive(intern);
+        if (timelineFilter === 'Finishing Soon') return intern.status === 'Accepted' && isFinishingSoon(intern.finishDate);
         if (timelineFilter === 'Finished') return isFinished(intern);
         return true;
       });
     }
+    
     if (sortConfig !== null) {
       result.sort((a, b) => {
         if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -475,7 +497,7 @@ export default function InternshipManagement() {
         };
       });
 
-      setInterns(newImportedInterns); // OVERWRITE SEMUA DATA LOKAL
+      setInterns(newImportedInterns);
 
       if (db) {
         const internsRef = collection(db, 'interns');
@@ -483,12 +505,10 @@ export default function InternshipManagement() {
         const querySnapshot = await getDocs(q);
         const batch = writeBatch(db);
         
-        // HAPUS SEMUA DATA SEBELUMNYA DI FIREBASE
         querySnapshot.forEach((document) => {
           batch.delete(document.ref);
         });
 
-        // MASUKKAN DATA BARU
         newImportedInterns.forEach(intern => {
           const docRef = doc(db, 'interns', intern.id.toString());
           batch.set(docRef, intern);
@@ -534,6 +554,40 @@ export default function InternshipManagement() {
       try { await setDoc(doc(db, 'interns', data.id.toString()), data); } catch (e) { console.error(e) }
     }
     setIsInternModalOpen(false);
+  };
+
+  const handleSaveRequest = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const data = {
+      id: Date.now(),
+      requester: formData.get('requester'),
+      sbu: formData.get('sbu'),
+      count: Number(formData.get('count')),
+      location: formData.get('location'),
+      timeline: formData.get('timeline'),
+      payment: formData.get('payment'),
+      objective: formData.get('objective'),
+      status: 'Pending',
+      createdAt: new Date().toISOString()
+    };
+
+    setInternRequests(prev => [data, ...prev]);
+    if (db) {
+      try { await setDoc(doc(db, 'internRequests', data.id.toString()), data); } catch (e) { console.error(e) }
+    }
+    alert('Permintaan berhasil diajukan dan masuk ke dalam Request Dashboard!');
+    e.target.reset();
+  };
+
+  const handleUpdateRequestStatus = async (id, newStatus) => {
+    const req = internRequests.find(r => r.id === id);
+    if (!req) return;
+    const updated = { ...req, status: newStatus };
+    setInternRequests(prev => prev.map(r => r.id === id ? updated : r));
+    if (db) {
+      try { await setDoc(doc(db, 'internRequests', id.toString()), updated); } catch (e) { console.error(e) }
+    }
   };
 
   const [partnerSubTab, setPartnerSubTab] = useState('agreements');
@@ -650,7 +704,6 @@ export default function InternshipManagement() {
       bullets: bullets,
     };
     
-    // Parse Sub-Sections jika user mengedit format JSON untuk menjadi FULLY EDITABLE
     if (editingSop?.subSections) {
       try {
         const subSecRaw = formData.get('subSections');
@@ -661,7 +714,7 @@ export default function InternshipManagement() {
         }
       } catch (err) {
         alert('Format JSON Sub-Sections tidak valid! Silakan perbaiki struktur kurung kurawal/siku.');
-        return; // Jangan save jika JSON error
+        return; 
       }
     }
 
@@ -693,7 +746,8 @@ export default function InternshipManagement() {
       visit: setSiteVisits,
       visitContact: setVisitContacts,
       internSOP: setInternSOP,
-      visitSOP: setVisitSOP
+      visitSOP: setVisitSOP,
+      internRequest: setInternRequests
     };
 
     const collectionMap = {
@@ -704,7 +758,8 @@ export default function InternshipManagement() {
       visit: 'siteVisits',
       visitContact: 'visitContacts',
       internSOP: 'internSOP',
-      visitSOP: 'visitSOP'
+      visitSOP: 'visitSOP',
+      internRequest: 'internRequests'
     };
 
     settersMap[type](prev => prev.filter(i => i.id !== id));
@@ -721,53 +776,69 @@ export default function InternshipManagement() {
   return (
     <div className="p-4 md:p-8 space-y-8 bg-slate-50 min-h-screen font-sans text-slate-900">
       
-      {/* Header Section */}
+      {/* Header Section dengan Gatekeeping Logic */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Internship & Visits</h1>
-          <p className="text-slate-500 mt-2 max-w-2xl">Platform terpusat untuk mengelola pipeline magang, partnership universitas, dan penjadwalan site visit eksternal.</p>
+          <p className="text-slate-500 mt-2 max-w-2xl">Platform terpusat untuk mengelola pipeline magang, portal request, partnership universitas, dan site visit.</p>
+        </div>
+        
+        {/* Tombol Auth Admin */}
+        <div>
+          {!isAdmin ? (
+            <button onClick={() => setIsLoginModalOpen(true)} className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-colors">
+              <Lock className="w-4 h-4 text-slate-400" /> Admin Access
+            </button>
+          ) : (
+            <button onClick={handleLogout} className="flex items-center gap-2 px-5 py-2.5 bg-red-50 border border-red-100 text-red-700 font-bold rounded-xl shadow-sm hover:bg-red-100 transition-colors">
+              <Unlock className="w-4 h-4" /> Logout Admin
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Modern Tabs Navigation */}
-      <div className="inline-flex space-x-1 bg-slate-200/50 p-1.5 rounded-xl overflow-x-auto max-w-full">
-        {[
-          { id: 'pipeline', label: 'Pipeline Interns', icon: Users },
-          { id: 'partnerships', label: 'Partnerships & MoU', icon: Building2 },
-          { id: 'visits', label: 'Site Visits', icon: Calendar },
-          { id: 'guidelines', label: 'Guidelines & Templates', icon: FileText }
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center space-x-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
-                isActive 
-                  ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-900/5' 
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-              }`}
-            >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* TABS HANYA MUNCUL JIKA ADMIN */}
+      {isAdmin && (
+        <div className="inline-flex space-x-1 bg-slate-200/50 p-1.5 rounded-xl overflow-x-auto max-w-full">
+          {[
+            { id: 'pipeline', label: 'Pipeline Interns', icon: Users },
+            { id: 'requests', label: 'Request Portal', icon: Inbox },
+            { id: 'partnerships', label: 'Partnerships & MoU', icon: Building2 },
+            { id: 'visits', label: 'Site Visits', icon: Calendar },
+            { id: 'guidelines', label: 'Guidelines & Templates', icon: FileText }
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center space-x-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+                  isActive 
+                    ? 'bg-white text-blue-700 shadow-sm ring-1 ring-slate-900/5' 
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ======================================= */}
-      {/* 1. PIPELINE INTERNS TAB                 */}
+      {/* 1. PIPELINE INTERNS TAB (Hanya Admin)   */}
       {/* ======================================= */}
-      {activeTab === 'pipeline' && (
+      {isAdmin && activeTab === 'pipeline' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
           
-          {/* Dashboard Summary Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
             {[
-              { label: 'Total Interns', value: pipelineStats.total, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
-              { label: 'Accepted', value: pipelineStats.accepted, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-              { label: 'Accepted & Ongoing', value: pipelineStats.ongoing, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+              { label: 'Total Database', value: pipelineStats.total, icon: Database, color: 'text-slate-600', bg: 'bg-slate-100' },
+              { label: 'Sedang Aktif', value: pipelineStats.active, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+              { label: 'Akan Masuk', value: pipelineStats.incoming, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
+              { label: 'Sudah Selesai', value: pipelineStats.finished, icon: Award, color: 'text-purple-600', bg: 'bg-purple-50' },
               { label: 'Segera Selesai', value: pipelineStats.finishingSoon, icon: AlertCircle, color: 'text-orange-600', bg: 'bg-orange-50' },
               { label: 'Rejected', value: pipelineStats.rejected, icon: XCircle, color: 'text-red-600', bg: 'bg-red-50' },
             ].map((stat, i) => (
@@ -810,10 +881,11 @@ export default function InternshipManagement() {
                   {uniqueSBUs.map((sbu, idx) => <option key={idx} value={sbu}>{sbu}</option>)}
                 </select>
 
-                <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500/20 outline-none" value={timelineFilter} onChange={(e) => setTimelineFilter(e.target.value)}>
+                <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500/20 outline-none font-semibold text-blue-800" value={timelineFilter} onChange={(e) => setTimelineFilter(e.target.value)}>
                   <option value="All">Semua Periode</option>
+                  <option value="Incoming">Diterima (Belum Aktif)</option>
                   <option value="Active">Sedang Aktif</option>
-                  <option value="Finishing Soon">Segera Selesai (&lt;30 Hari)</option>
+                  <option value="Finishing Soon">Hampir Selesai (&lt;30 Hari)</option>
                   <option value="Finished">Sudah Selesai</option>
                 </select>
               </div>
@@ -878,7 +950,6 @@ export default function InternshipManagement() {
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           
-                          {/* FITUR BARU: Download SKM jika status Finish */}
                           {intern.internshipStatus === 'Finish' && (
                             <button 
                               onClick={() => handleDownloadSKM(intern)} 
@@ -904,9 +975,202 @@ export default function InternshipManagement() {
       )}
 
       {/* ======================================= */}
-      {/* 2. PARTNERSHIPS TAB                     */}
+      {/* 2. REQUEST PORTAL TAB (Bisa diakses User & Admin) */}
       {/* ======================================= */}
-      {activeTab === 'partnerships' && (
+      {(!isAdmin || activeTab === 'requests') && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          
+          {/* Sub-tab hanya muncul jika ADMIN, jika user biasa langsung render form */}
+          {isAdmin && (
+            <div className="flex space-x-6 border-b border-slate-200">
+              <button onClick={() => setRequestSubTab('portal')} className={`pb-3 text-sm font-semibold transition-colors relative ${requestSubTab === 'portal' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}>Form Request <span className="ml-1 bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full text-xs">Portal</span> {requestSubTab === 'portal' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-full"></span>}</button>
+              <button onClick={() => setRequestSubTab('dashboard')} className={`pb-3 text-sm font-semibold transition-colors relative ${requestSubTab === 'dashboard' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}>Request Dashboard <span className="ml-1 bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full text-xs">{internRequests.length}</span> {requestSubTab === 'dashboard' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-full"></span>}</button>
+            </div>
+          )}
+
+          {(!isAdmin || requestSubTab === 'portal') && (
+            <div className="max-w-4xl mx-auto">
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200/60 p-6 md:p-10 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50 rounded-bl-full -z-10 opacity-60"></div>
+                
+                <div className="mb-8">
+                  <h2 className="text-2xl font-extrabold text-slate-900 flex items-center gap-3"><Send className="w-6 h-6 text-blue-600"/> Pengajuan Kebutuhan Magang</h2>
+                  <p className="text-slate-500 mt-2">Silakan isi formulir di bawah ini untuk mengajukan permintaan tenaga magang (intern) pada divisi/SBU Anda. Tim Learning & Culture akan memproses pipeline berdasarkan data yang masuk.</p>
+                </div>
+
+                <form onSubmit={handleSaveRequest} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5">Nama User / Pengaju</label>
+                      <input required name="requester" placeholder="Ex: Purnama Aditya" className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5">Divisi / SBU / SFU</label>
+                      <input required name="sbu" placeholder="Ex: SFU - Corporate Communication" className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5">Jumlah Intern Dibutuhkan</label>
+                      <input type="number" required min="1" max="20" name="count" placeholder="Berapa Orang?" className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5">Lokasi Penempatan</label>
+                      <input required name="location" placeholder="Ex: Head Office (Lt 4) / Depo DMS" className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5">Estimasi Timeline Pelaksanaan</label>
+                      <input required name="timeline" placeholder="Ex: Juli - September 2026" className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Skema Tunjangan (Paid / Unpaid)</label>
+                    <div className="text-xs text-slate-500 mb-2">Sesuai kebijakan "Internship Policy Guideline 2025", standar program magang adalah <strong className="text-amber-600">Unpaid</strong> kecuali SBU Anda memiliki budget/skema khusus.</div>
+                    <select name="payment" defaultValue="Unpaid" className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all font-semibold">
+                      <option value="Unpaid">Unpaid (Disarankan / Standar)</option>
+                      <option value="Paid">Paid (Menggunakan Budget Internal Divisi SBU/SFU)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Objektif & Rencana Pembelajaran</label>
+                    <div className="text-xs text-slate-500 mb-2">Jelaskan tugas utama atau project apa yang akan dikerjakan intern selama berada di divisi Anda.</div>
+                    <textarea required name="objective" placeholder="Ex: Membantu rekap data vendor, analisa rute pelayaran cabang timur, dan belajar operasional logistik di pelabuhan..." className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl h-28 resize-none outline-none transition-all" />
+                  </div>
+
+                  <div className="pt-4 flex justify-end">
+                    <button type="submit" className="px-8 py-3.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-md transition-colors flex items-center gap-2">
+                      <Send className="w-5 h-5"/> Kirim Pengajuan
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* REQUEST DASHBOARD: KINI TAMPIL LEBIH RAPI DENGAN GRID CARDS */}
+          {isAdmin && requestSubTab === 'dashboard' && (
+            <div className="space-y-6">
+              
+              {/* Summary Stats untuk Request */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+                   <span className="text-slate-500 text-sm font-medium">Total Requests</span>
+                   <span className="text-2xl font-bold text-slate-900">{requestAdminStats.total}</span>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-blue-200 shadow-sm flex flex-col bg-blue-50/30">
+                   <span className="text-blue-600 text-sm font-medium">Pending</span>
+                   <span className="text-2xl font-bold text-blue-700">{requestAdminStats.pending}</span>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-sm flex flex-col bg-emerald-50/30">
+                   <span className="text-emerald-600 text-sm font-medium">Approved</span>
+                   <span className="text-2xl font-bold text-emerald-700">{requestAdminStats.approved}</span>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-red-200 shadow-sm flex flex-col bg-red-50/30">
+                   <span className="text-red-600 text-sm font-medium">Rejected</span>
+                   <span className="text-2xl font-bold text-red-700">{requestAdminStats.rejected}</span>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-teal-200 shadow-sm flex flex-col bg-teal-50/30">
+                   <span className="text-teal-600 text-sm font-medium">Fulfilled</span>
+                   <span className="text-2xl font-bold text-teal-700">{requestAdminStats.fulfilled}</span>
+                </div>
+                <div className="bg-white p-4 rounded-2xl border border-purple-200 shadow-sm flex flex-col bg-purple-50/30">
+                   <span className="text-purple-600 text-sm font-medium">Completed</span>
+                   <span className="text-2xl font-bold text-purple-700">{requestAdminStats.completed}</span>
+                </div>
+              </div>
+
+              {/* Toolbar Filter & Sort Request */}
+              <div className="flex flex-col lg:flex-row justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200/60 mb-6">
+                <div className="flex flex-wrap items-center gap-3 flex-1">
+                  <div className="relative min-w-[200px] flex-1 max-w-sm">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input type="text" placeholder="Cari SBU, Pengaju, Lokasi..." className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" value={requestSearchTerm} onChange={(e) => setRequestSearchTerm(e.target.value)} />
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500/20 outline-none" value={requestStatusFilter} onChange={(e) => setRequestStatusFilter(e.target.value)}>
+                      <option value="All">Semua Status</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Approved">Approved</option>
+                      <option value="Fulfilled">Fulfilled</option>
+                      <option value="Completed">Completed</option>
+                      <option value="Rejected">Rejected</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-sm font-semibold text-slate-500">Urutkan:</span>
+                  <select className="bg-white border border-slate-200 text-blue-700 text-sm rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500/20 outline-none font-bold" value={requestSortConfig} onChange={(e) => setRequestSortConfig(e.target.value)}>
+                    <option value="Urgent">Paling Urgent (Timeline)</option>
+                    <option value="Newest">Terbaru Diajukan</option>
+                    <option value="Oldest">Terlama Diajukan</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Grid Cards Request */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filteredAndSortedRequests.map(req => (
+                  <div key={req.id} className="bg-white border border-slate-200/80 rounded-2xl shadow-sm hover:shadow-md transition-all p-5 flex flex-col">
+                    <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h4 className="font-extrabold text-lg text-slate-900 leading-tight">{req.sbu}</h4>
+                          <p className="text-sm text-slate-500 font-medium">{req.requester}</p>
+                        </div>
+                        <select 
+                            value={req.status} 
+                            onChange={(e) => handleUpdateRequestStatus(req.id, e.target.value)}
+                            className={`px-2.5 py-1.5 rounded-md text-xs font-bold border outline-none cursor-pointer text-center ${getStatusBadge(req.status)}`}
+                        >
+                            <option value="Pending">Pending</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Fulfilled">Fulfilled</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Rejected">Rejected</option>
+                        </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-sm text-slate-600 mb-4">
+                        <div><span className="block text-xs text-slate-400">Kebutuhan</span><strong className="text-blue-700">{req.count} Orang</strong></div>
+                        <div><span className="block text-xs text-slate-400">Skema</span><strong className="text-slate-700">{req.payment}</strong></div>
+                        <div className="col-span-2"><span className="block text-xs text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3"/> Timeline</span><span className="font-medium text-slate-800">{req.timeline}</span></div>
+                        <div className="col-span-2"><span className="block text-xs text-slate-400 flex items-center gap-1"><MapPin className="w-3 h-3"/> Lokasi</span><span className="font-medium text-slate-800">{req.location}</span></div>
+                    </div>
+
+                    <div className="bg-slate-50 rounded-xl p-3 text-sm text-slate-700 border border-slate-100 mb-4 flex-1">
+                        <span className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><BookOpen className="w-3 h-3"/> Objektif & Tugas:</span>
+                        <p className="line-clamp-4 hover:line-clamp-none transition-all">{req.objective}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-100">
+                        <div className="text-xs text-slate-400 font-mono" title="Tanggal Diajukan">{new Date(req.createdAt).toLocaleDateString('id-ID')}</div>
+                        <div className="flex gap-2">
+                          <button onClick={() => setItemToDelete({type: 'internRequest', id: req.id})} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                        </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {filteredAndSortedRequests.length === 0 && (
+                  <div className="col-span-full py-16 flex flex-col items-center justify-center text-slate-400 bg-white rounded-2xl border border-slate-200 border-dashed">
+                    <Inbox className="w-12 h-12 mb-3 text-slate-300"/>
+                    <p className="font-medium">Belum ada pengajuan masuk.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ======================================= */}
+      {/* 3. PARTNERSHIPS TAB (Hanya Admin)       */}
+      {/* ======================================= */}
+      {isAdmin && activeTab === 'partnerships' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -975,6 +1239,7 @@ export default function InternshipManagement() {
                           </td>
                         </tr>
                       ))}
+                      {agreements.length === 0 && <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-500 font-medium">Belum ada data agreement.</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -1017,6 +1282,7 @@ export default function InternshipManagement() {
                           ))}
                         </tr>
                       ))}
+                      {schedules.length === 0 && <tr><td colSpan={13} className="px-6 py-12 text-center text-slate-500 font-medium">Belum ada data jadwal intake.</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -1092,6 +1358,7 @@ export default function InternshipManagement() {
                           </td>
                         </tr>
                       ))}
+                      {filteredContacts.length === 0 && <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500 font-medium">Belum ada data kontak.</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -1102,9 +1369,9 @@ export default function InternshipManagement() {
       )}
 
       {/* ======================================= */}
-      {/* 3. SITE VISITS TAB                      */}
+      {/* 4. SITE VISITS TAB (Hanya Admin)        */}
       {/* ======================================= */}
-      {activeTab === 'visits' && (
+      {isAdmin && activeTab === 'visits' && (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
           <div className="flex space-x-6 border-b border-slate-200">
             <button onClick={() => setVisitSubTab('sop')} className={`pb-3 text-sm font-semibold transition-colors relative ${visitSubTab === 'sop' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}>SOP & Guidelines {visitSubTab === 'sop' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 rounded-t-full"></span>}</button>
@@ -1269,9 +1536,9 @@ export default function InternshipManagement() {
       )}
 
       {/* ======================================= */}
-      {/* 4. GUIDELINES & TEMPLATES TAB           */}
+      {/* 5. GUIDELINES & TEMPLATES TAB (Hanya Admin) */}
       {/* ======================================= */}
-      {activeTab === 'guidelines' && (
+      {isAdmin && activeTab === 'guidelines' && (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
           
           {/* Download Center */}
@@ -1384,6 +1651,33 @@ export default function InternshipManagement() {
       {/* UNIVERSAL MODALS                        */}
       {/* ======================================= */}
       
+      {/* Login Admin Modal */}
+      {isLoginModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 border border-slate-100">
+            <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-5 border border-blue-100">
+              <KeyRound className="w-8 h-8 text-blue-600" />
+            </div>
+            <h2 className="text-xl font-extrabold text-center text-slate-900 mb-2">Admin Login</h2>
+            <p className="text-sm text-center text-slate-500 mb-6">Masukkan password untuk mengakses semua fitur manajemen magang.</p>
+            <form onSubmit={handleLogin}>
+              <input 
+                type="password" 
+                required 
+                placeholder="Enter password..." 
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3.5 rounded-xl outline-none transition-all text-center tracking-widest font-mono mb-6" 
+              />
+              <div className="flex justify-center gap-3">
+                <button type="button" onClick={() => setIsLoginModalOpen(false)} className="flex-1 px-4 py-3 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl font-semibold transition-colors">Batal</button>
+                <button type="submit" className="flex-1 px-4 py-3 bg-blue-600 text-white hover:bg-blue-700 rounded-xl font-semibold shadow-sm transition-colors">Akses</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* SOP Editing Modal */}
       {isSopModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
