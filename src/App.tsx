@@ -34,6 +34,21 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+// --- CONSTANTS ---
+const SBU_OPTIONS = [
+  "SBU - AGENCY HMM", "SBU - ASSET & CHARTER", "SBU - ASSET PROPERTY", "SBU - CREWING",
+  "SBU - DRYBULK - MDM", "SBU - INSURANCE", "SBU - LINER - COMMERCIAL", "SBU - LINER - INTERNATIONAL",
+  "SBU - LINER - OPS", "SBU - LINER - TRADE", "SBU - LOGISTICS", "SBU - MDI", "SBU - MSM", "SBU - MTM",
+  "SBU - TERMINAL - CLC", "SBU - TERMINAL - MPI", "SBU - TERMINAL - MSA", "SBU - TERMINAL - NPTI",
+  "SBU - TERMINAL - OJA", "SBU - TRUCKING", "SBU - WORKSHOP"
+];
+
+const SFU_OPTIONS = [
+  "SFU - BUSINESS DEVELOPMENT", "SFU - BUSINESS PROCESS MANAGEMENT", "SFU - CORP COMMUNICATION",
+  "SFU - DIGITAL FACTORY", "SFU - DIR OFFICE", "SFU - ENERGY SOURCING", "SFU - FIN & ACC",
+  "SFU - GA", "SFU - HRD", "SFU - IA", "SFU - IT", "SFU - LEGAL", "SFU - PROCUREMENT", "SFU - PROCUREMENT MSM"
+];
+
 // --- ICON RENDERER HELPER ---
 const RenderIcon = ({ name, className }) => {
   switch(name) {
@@ -154,11 +169,12 @@ export default function InternshipManagement() {
   const [timelineFilter, setTimelineFilter] = useState('All');
   const [sortConfig, setSortConfig] = useState(null);
   
-  // -- REQUESTS TAB FILTER --
+  // -- REQUESTS TAB FILTER & STATE --
   const [requestSubTab, setRequestSubTab] = useState('portal');
   const [requestSearchTerm, setRequestSearchTerm] = useState('');
   const [requestStatusFilter, setRequestStatusFilter] = useState('All');
   const [requestSortConfig, setRequestSortConfig] = useState('Urgent');
+  const [requestPaymentType, setRequestPaymentType] = useState('Unpaid');
 
   // -- MODALS --
   const [isInternModalOpen, setIsInternModalOpen] = useState(false);
@@ -359,7 +375,8 @@ export default function InternshipManagement() {
       result = result.filter(req => 
         req.requester.toLowerCase().includes(lowerSearch) || 
         req.sbu.toLowerCase().includes(lowerSearch) ||
-        req.location.toLowerCase().includes(lowerSearch)
+        req.location.toLowerCase().includes(lowerSearch) ||
+        (req.position && req.position.toLowerCase().includes(lowerSearch))
       );
     }
 
@@ -373,29 +390,25 @@ export default function InternshipManagement() {
       } else if (requestSortConfig === 'Oldest') {
         return new Date(a.createdAt) - new Date(b.createdAt);
       } else if (requestSortConfig === 'Urgent') {
-        const parseDate = (str) => {
-           if (!str) return 9999999999999;
-           const lowerStr = str.toLowerCase();
-           if (lowerStr.includes('asap') || lowerStr.includes('segera') || lowerStr.includes('urgent')) return 0;
-
-           const months = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5, 'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11 };
-           let month = 11;
-           let year = 2099;
-           
-           const yearMatch = lowerStr.match(/20\d{2}/);
-           if (yearMatch) year = parseInt(yearMatch[0]);
-
-           for (const [mName, mNum] of Object.entries(months)) {
-             if (lowerStr.includes(mName)) {
-               month = mNum;
-               break;
-             }
-           }
-           return new Date(year, month, 1).getTime();
+        const getDateVal = (req) => {
+          if (req.startDate) return new Date(req.startDate).getTime();
+          // Fallback parsing for old data without startDate
+          const str = req.timeline || '';
+          const lowerStr = str.toLowerCase();
+          if (lowerStr.includes('asap') || lowerStr.includes('segera') || lowerStr.includes('urgent')) return 0;
+          const months = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5, 'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11 };
+          let month = 11;
+          let year = 2099;
+          const yearMatch = lowerStr.match(/20\d{2}/);
+          if (yearMatch) year = parseInt(yearMatch[0]);
+          for (const [mName, mNum] of Object.entries(months)) {
+            if (lowerStr.includes(mName)) { month = mNum; break; }
+          }
+          return new Date(year, month, 1).getTime();
         };
 
-        const dateA = parseDate(a.timeline);
-        const dateB = parseDate(b.timeline);
+        const dateA = getDateVal(a);
+        const dateB = getDateVal(b);
         
         if (dateA !== dateB) return dateA - dateB;
         return new Date(a.createdAt) - new Date(b.createdAt);
@@ -559,14 +572,32 @@ export default function InternshipManagement() {
   const handleSaveRequest = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    
+    // Format Timeline String based on Start and End Date
+    const startDateRaw = formData.get('startDate');
+    const endDateRaw = formData.get('endDate');
+    const startDateObj = new Date(startDateRaw);
+    const endDateObj = new Date(endDateRaw);
+    const startStr = startDateObj.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+    const endStr = endDateObj.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+    const timelineStr = `${startStr} - ${endStr}`;
+
+    // Payment Logic
+    const paymentType = formData.get('payment');
+    const nominal = formData.get('nominal');
+    const paymentStr = paymentType === 'Paid' ? `Paid (${nominal})` : 'Unpaid';
+
     const data = {
       id: Date.now(),
       requester: formData.get('requester'),
       sbu: formData.get('sbu'),
+      position: formData.get('position'),
       count: Number(formData.get('count')),
       location: formData.get('location'),
-      timeline: formData.get('timeline'),
-      payment: formData.get('payment'),
+      startDate: startDateRaw, 
+      endDate: endDateRaw,
+      timeline: timelineStr,
+      payment: paymentStr,
       objective: formData.get('objective'),
       status: 'Pending',
       createdAt: new Date().toISOString()
@@ -578,6 +609,7 @@ export default function InternshipManagement() {
     }
     alert('Permintaan berhasil diajukan dan masuk ke dalam Request Dashboard!');
     e.target.reset();
+    setRequestPaymentType('Unpaid'); // Reset custom state
   };
 
   const handleUpdateRequestStatus = async (id, newStatus) => {
@@ -1006,11 +1038,23 @@ export default function InternshipManagement() {
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1.5">Divisi / SBU / SFU</label>
-                      <input required name="sbu" placeholder="Ex: SFU - Corporate Communication" className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all" />
+                      <select required name="sbu" className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all text-slate-700">
+                        <option value="">-- Pilih SBU / SFU --</option>
+                        <optgroup label="SBU (Strategic Business Unit)">
+                          {SBU_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </optgroup>
+                        <optgroup label="SFU (Strategic Function Unit)">
+                          {SFU_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                        </optgroup>
+                      </select>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5">Jabatan / Posisi Intern</label>
+                      <input required name="position" placeholder="Ex: Data Analyst Intern" className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all" />
+                    </div>
                     <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1.5">Jumlah Intern Dibutuhkan</label>
                       <input type="number" required min="1" max="20" name="count" placeholder="Berapa Orang?" className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all" />
@@ -1019,19 +1063,32 @@ export default function InternshipManagement() {
                       <label className="block text-sm font-bold text-slate-700 mb-1.5">Lokasi Penempatan</label>
                       <input required name="location" placeholder="Ex: Head Office (Lt 4) / Depo DMS" className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all" />
                     </div>
-                    <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-1.5">Estimasi Timeline Pelaksanaan</label>
-                      <input required name="timeline" placeholder="Ex: Juli - September 2026" className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all" />
-                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Skema Tunjangan (Paid / Unpaid)</label>
-                    <div className="text-xs text-slate-500 mb-2">Sesuai kebijakan "Internship Policy Guideline 2025", standar program magang adalah <strong className="text-amber-600">Unpaid</strong> kecuali SBU Anda memiliki budget/skema khusus.</div>
-                    <select name="payment" defaultValue="Unpaid" className="w-full bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all font-semibold">
-                      <option value="Unpaid">Unpaid (Disarankan / Standar)</option>
-                      <option value="Paid">Paid (Menggunakan Budget Internal Divisi SBU/SFU)</option>
-                    </select>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5">Estimasi Timeline Pelaksanaan</label>
+                      <div className="text-xs text-slate-500 mb-2">Pilih bulan rencana mulai dan berakhirnya program.</div>
+                      <div className="flex items-center gap-2">
+                        <input type="date" required name="startDate" className="flex-1 bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all text-sm" />
+                        <span className="text-slate-400 font-bold">-</span>
+                        <input type="date" required name="endDate" className="flex-1 bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all text-sm" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5">Skema Tunjangan (Paid / Unpaid)</label>
+                      <div className="text-xs text-slate-500 mb-2">Sesuai kebijakan standar program magang adalah <strong className="text-amber-600">Unpaid</strong>.</div>
+                      <div className="flex flex-col sm:flex-row gap-3">
+                        <select name="payment" value={requestPaymentType} onChange={(e) => setRequestPaymentType(e.target.value)} className="flex-1 bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all font-semibold text-slate-700">
+                          <option value="Unpaid">Unpaid (Standar)</option>
+                          <option value="Paid">Paid (Budget Internal)</option>
+                        </select>
+                        {requestPaymentType === 'Paid' && (
+                          <input type="text" name="nominal" required placeholder="Nominal (Ex: Rp 1.500.000 / bln)" className="flex-1 bg-white border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 p-3 rounded-xl outline-none transition-all placeholder:text-slate-400 text-sm" />
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   <div>
@@ -1087,7 +1144,7 @@ export default function InternshipManagement() {
                 <div className="flex flex-wrap items-center gap-3 flex-1">
                   <div className="relative min-w-[200px] flex-1 max-w-sm">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input type="text" placeholder="Cari SBU, Pengaju, Lokasi..." className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" value={requestSearchTerm} onChange={(e) => setRequestSearchTerm(e.target.value)} />
+                    <input type="text" placeholder="Cari SBU, Pengaju, Lokasi, Posisi..." className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" value={requestSearchTerm} onChange={(e) => setRequestSearchTerm(e.target.value)} />
                   </div>
                   
                   <div className="flex flex-wrap items-center gap-2">
@@ -1119,7 +1176,8 @@ export default function InternshipManagement() {
                     <div className="flex justify-between items-start mb-4">
                         <div>
                           <h4 className="font-extrabold text-lg text-slate-900 leading-tight">{req.sbu}</h4>
-                          <p className="text-sm text-slate-500 font-medium">{req.requester}</p>
+                          <p className="text-sm text-blue-600 font-bold mb-1">{req.position}</p>
+                          <p className="text-sm text-slate-500 font-medium">Diajukan oleh: {req.requester}</p>
                         </div>
                         <select 
                             value={req.status} 
