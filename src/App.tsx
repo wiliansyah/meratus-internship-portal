@@ -236,8 +236,9 @@ export default function InternshipManagement() {
   // --- HELPER FORMAT TANGGAL ---
   const formatDateID = (dateStr) => {
     if (!dateStr || dateStr === '-') return '-';
-    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
     const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
     return `${String(date.getDate()).padStart(2, '0')} ${months[date.getMonth()]} ${date.getFullYear()}`;
   };
 
@@ -1018,11 +1019,11 @@ export default function InternshipManagement() {
                       </td>
                       <td className="px-6 py-4 text-slate-600">{intern.group}</td>
                       <td className="px-6 py-4 text-slate-600">{intern.supervisor}</td>
-                      <td className="px-6 py-4 text-slate-600 font-mono text-xs">{intern.joinDate !== '-' ? intern.joinDate : '-'}</td>
+                      <td className="px-6 py-4 text-slate-600 font-mono text-xs">{intern.joinDate !== '-' ? formatDateID(intern.joinDate) : '-'}</td>
                       <td className="px-6 py-4 text-slate-600">
                         {intern.finishDate !== '-' ? (
                           <div className="flex flex-col gap-1.5 items-start">
-                            <span className="font-mono text-xs">{intern.finishDate}</span>
+                            <span className="font-mono text-xs">{formatDateID(intern.finishDate)}</span>
                             {isFinishingSoon(intern.finishDate) && intern.status === 'Accepted' && (
                               <span className="px-2 py-0.5 bg-orange-100 text-orange-700 border border-orange-200 rounded text-[10px] font-bold uppercase tracking-wider">⏳ &lt;30 Hari</span>
                             )}
@@ -2040,7 +2041,7 @@ export default function InternshipManagement() {
                 <div className="grid grid-cols-4 gap-2">
                   {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, idx) => (
                     <label key={month} className="flex items-center gap-2 text-sm bg-slate-50 border border-slate-200 p-2 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors">
-                      <input type="checkbox" name={`month_${idx}`} defaultChecked={editingSchedule?.months?.includes(idx)} className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"/>
+                      <input type="checkbox" name={`month_${idx}`} defaultChecked={editingSchedule?.months?.includes(idx)} className="rounded text-blue-600 focus:ring-blue-50 w-4 h-4"/>
                       <span className="font-medium text-slate-700">{month}</span>
                     </label>
                   ))}
