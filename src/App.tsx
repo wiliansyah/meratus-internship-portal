@@ -350,6 +350,19 @@ export default function InternshipManagement() {
     return diffDays >= 0 && diffDays <= 30;
   };
 
+  const canDownloadSKM = (intern) => {
+    if (intern.internshipStatus === 'Finish') return true;
+    if (intern.status !== 'Accepted') return false;
+    if (!intern.finishDate || intern.finishDate === '-') return false;
+    
+    const finishDate = new Date(intern.finishDate);
+    const todayZero = new Date();
+    todayZero.setHours(0,0,0,0);
+    
+    const diffDays = Math.ceil((finishDate.getTime() - todayZero.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays <= 5; // H-5 atau sudah lewat
+  };
+
   // 1. Definisikan state filternya terlebih dahulu sehingga bisa diakses secara berurutan
   const filteredAndSortedInterns = useMemo(() => {
     let result = [...interns];
@@ -1071,7 +1084,7 @@ export default function InternshipManagement() {
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           
-                          {intern.internshipStatus === 'Finish' && (
+                          {canDownloadSKM(intern) && (
                             <button 
                               onClick={() => handleDownloadSKM(intern)} 
                               title="Download Surat Keterangan Magang (PDF)"
