@@ -370,8 +370,45 @@ export default function InternshipManagement() {
     
     if (sortConfig !== null) {
       result.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
+        let valA = a[sortConfig.key];
+        let valB = b[sortConfig.key];
+
+        // Penanganan khusus untuk kolom tanggal (joinDate & finishDate)
+        if (sortConfig.key === 'joinDate' || sortConfig.key === 'finishDate') {
+          const parseDateForSort = (dateStr) => {
+            if (!dateStr || dateStr === '-') return 0;
+            // Coba parsing standar YYYY-MM-DD
+            let d = new Date(dateStr).getTime();
+            if (!isNaN(d)) return d;
+            
+            // Fallback parsing untuk data teks Indonesia (contoh: "06 Juli 2026")
+            const lowerStr = dateStr.toLowerCase();
+            const months = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5, 'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11 };
+            let month = 0, year = 0, day = 1;
+            const yearMatch = lowerStr.match(/20\d{2}/);
+            if (yearMatch) year = parseInt(yearMatch[0]);
+            const dayMatch = lowerStr.match(/\b\d{1,2}\b/);
+            if (dayMatch) day = parseInt(dayMatch[0]);
+            for (const [mName, mNum] of Object.entries(months)) {
+              if (lowerStr.includes(mName)) { month = mNum; break; }
+            }
+            return new Date(year, month, day).getTime();
+          };
+
+          const timeA = parseDateForSort(valA);
+          const timeB = parseDateForSort(valB);
+
+          if (timeA < timeB) return sortConfig.direction === 'asc' ? -1 : 1;
+          if (timeA > timeB) return sortConfig.direction === 'asc' ? 1 : -1;
+          return 0;
+        }
+
+        // Penanganan pengurutan default (huruf/abjad)
+        valA = valA ? valA.toString().toLowerCase() : '';
+        valB = valB ? valB.toString().toLowerCase() : '';
+
+        if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
       });
     }
