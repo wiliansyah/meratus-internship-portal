@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, getDocs, query } from 'firebase/firestore';
 import { 
   Users, Building2, Calendar, FileText, Search, Plus, Upload, Download,
   BookOpen, Clock, CheckCircle2, XCircle, ArrowUpDown, AlertCircle,
   Edit2, Trash2, MapPin, ListTodo, Presentation, Camera,
   Shield, Award, DollarSign, UserCheck, PenTool, ClipboardCheck, Database, Settings, Briefcase, DownloadCloud,
-  Send, Inbox, Lock, Unlock, KeyRound
+  Send, Inbox, Lock, Unlock, KeyRound, Mail
 } from 'lucide-react';
 
 // --- MOCK COMPONENTS ---
@@ -18,7 +18,7 @@ const AIAssistant = () => (
   </div>
 );
 
-// --- FIREBASE CONFIGURATION (Milik User) ---
+// --- FIREBASE CONFIGURATION (Eksternal Milik User) ---
 const firebaseConfig = {
   apiKey: "AIzaSyAgZUtc5aZguYz_MW5zISkuLvDgPmDixfg",
   authDomain: "meratus-frd-lms-10276.firebaseapp.com",
@@ -33,6 +33,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+
+// Helper function untuk mengarah kembali ke ROOT collection database Anda
+const getColRef = (colName) => collection(db, colName);
+const getDocRef = (colName, docId) => doc(db, colName, docId.toString());
 
 // --- CONSTANTS ---
 const SBU_OPTIONS = [
@@ -94,8 +98,35 @@ const getStatusBadge = (status) => {
   }
 };
 
+// --- HELPER PARSE TANGGAL ---
+const parseDateStr = (dateStr) => {
+  if (!dateStr || dateStr === '-') return 0;
+  let d = new Date(dateStr).getTime();
+  if (!isNaN(d)) return d;
+  
+  const lowerStr = dateStr.toLowerCase();
+  const yearMatch = lowerStr.match(/20\d{2}/);
+  if (!yearMatch) return 0; 
+  
+  const year = parseInt(yearMatch[0]);
+  let month = 0;
+  const months = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5, 'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11 };
+  for (const [mName, mNum] of Object.entries(months)) {
+    if (lowerStr.includes(mName)) { month = mNum; break; }
+  }
+  
+  let day = 1;
+  const dayMatch = lowerStr.match(/\b\d{1,2}\b/);
+  if (dayMatch) day = parseInt(dayMatch[0]);
+  
+  return new Date(year, month, day).getTime();
+};
+
 export default function InternshipManagement() {
-  // -- AUTH & GATEKEEPING STATES --
+  // -- AUTH STATES --
+  const [authUser, setAuthUser] = useState(null);
+
+  // -- GATEKEEPING STATES --
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
@@ -103,7 +134,7 @@ export default function InternshipManagement() {
   // -- MAIN TABS --
   const [activeTab, setActiveTab] = useState('requests');
   
-  // -- DATA STATES (Pure Empty Initialized, Data fully driven by Firebase) --
+  // -- DATA STATES --
   const [interns, setInterns] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [schedules, setSchedules] = useState([]);
@@ -115,42 +146,52 @@ export default function InternshipManagement() {
   const [internSOP, setInternSOP] = useState([]);
   const [visitSOP, setVisitSOP] = useState([]);
 
-  // --- FIREBASE AUTH ---
+  // -- MODAL STATES (Global UI) --
+  const [alertMessage, setAlertMessage] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
+
+  // --- FIREBASE AUTH INITIALIZATION ---
   useEffect(() => {
+    // Memaksa Anonymous Login langsung ke project Firebase Anda (mengabaikan token platform)
     signInAnonymously(auth).catch(console.error);
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setAuthUser(user);
+    });
+    return () => unsubscribe();
   }, []);
 
   // --- FIREBASE REALTIME SYNC ---
   useEffect(() => {
-    if (!db) return; 
+    if (!db || !authUser) return; 
     
     try {
       const unsubs = [
-        onSnapshot(collection(db, 'interns'), snap => {
+        onSnapshot(getColRef('interns'), snap => {
           if (!snap.empty) setInterns(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
-        onSnapshot(collection(db, 'agreements'), snap => {
+        onSnapshot(getColRef('agreements'), snap => {
           if (!snap.empty) setAgreements(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
-        onSnapshot(collection(db, 'schedules'), snap => {
+        onSnapshot(getColRef('schedules'), snap => {
           if (!snap.empty) setSchedules(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
-        onSnapshot(collection(db, 'contacts'), snap => {
+        onSnapshot(getColRef('contacts'), snap => {
           if (!snap.empty) setContacts(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
-        onSnapshot(collection(db, 'siteVisits'), snap => {
+        onSnapshot(getColRef('siteVisits'), snap => {
           if (!snap.empty) setSiteVisits(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
-        onSnapshot(collection(db, 'visitContacts'), snap => {
+        onSnapshot(getColRef('visitContacts'), snap => {
           if (!snap.empty) setVisitContacts(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
-        onSnapshot(collection(db, 'internRequests'), snap => {
+        onSnapshot(getColRef('internRequests'), snap => {
           if (!snap.empty) setInternRequests(snap.docs.map(d => d.data()).sort((a, b) => b.id - a.id));
         }, err => console.error(err)),
-        onSnapshot(collection(db, 'internSOP'), snap => {
+        onSnapshot(getColRef('internSOP'), snap => {
           if (!snap.empty) setInternSOP(snap.docs.map(d => d.data()).sort((a, b) => a.id - b.id));
         }, err => console.error(err)),
-        onSnapshot(collection(db, 'visitSOP'), snap => {
+        onSnapshot(getColRef('visitSOP'), snap => {
           if (!snap.empty) setVisitSOP(snap.docs.map(d => d.data()).sort((a, b) => a.id - b.id));
         }, err => console.error(err))
       ];
@@ -159,7 +200,7 @@ export default function InternshipManagement() {
     } catch (e) {
       console.log("Firebase sync warning:", e);
     }
-  }, []);
+  }, [authUser]);
 
   // -- PIPELINE FILTERS --
   const [searchTerm, setSearchTerm] = useState('');
@@ -206,9 +247,9 @@ export default function InternshipManagement() {
       setIsAdmin(true);
       setIsLoginModalOpen(false);
       setPasswordInput('');
-      setActiveTab('pipeline'); // Arahkan admin langsung ke pipeline setelah login
+      setActiveTab('pipeline');
     } else {
-      alert("Password salah. Akses ditolak.");
+      setAlertMessage("Password salah. Akses ditolak.");
     }
   };
 
@@ -226,7 +267,7 @@ export default function InternshipManagement() {
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
       script.onload = () => resolve(window.jspdf.jsPDF);
       script.onerror = () => {
-        alert("Gagal memuat sistem pembuat PDF. Pastikan koneksi internet Anda stabil.");
+        setAlertMessage("Gagal memuat sistem pembuat PDF. Pastikan koneksi internet Anda stabil.");
         reject(new Error("Failed to load jsPDF script"));
       };
       document.body.appendChild(script);
@@ -240,6 +281,104 @@ export default function InternshipManagement() {
     if (isNaN(date.getTime())) return dateStr;
     const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
     return `${String(date.getDate()).padStart(2, '0')} ${months[date.getMonth()]} ${date.getFullYear()}`;
+  };
+
+  // --- EFFECT AUTO UPDATE STATUS MAGANG ---
+  useEffect(() => {
+    if (!db || !authUser || interns.length === 0) return;
+    
+    const todayZero = new Date();
+    todayZero.setHours(0,0,0,0);
+    const nowTime = todayZero.getTime();
+    
+    const updates = [];
+    interns.forEach(intern => {
+      if (intern.status === 'Accepted') {
+        const joinTime = parseDateStr(intern.joinDate);
+        const finishTime = parseDateStr(intern.finishDate);
+        
+        if (joinTime > 0 && finishTime > 0) {
+          let newStatus = intern.internshipStatus;
+          
+          if (nowTime >= finishTime) {
+            if (newStatus !== 'Finish') newStatus = 'Finish';
+          } else if (nowTime >= joinTime && nowTime < finishTime) {
+            if (newStatus !== 'Active' && newStatus !== 'Resigned' && newStatus !== 'Finish') newStatus = 'Active';
+          }
+          
+          if (newStatus !== intern.internshipStatus) {
+            updates.push({ ...intern, internshipStatus: newStatus });
+          }
+        }
+      }
+    });
+    
+    if (updates.length > 0) {
+      const batch = writeBatch(db);
+      updates.forEach(u => {
+        batch.set(getDocRef('interns', u.id), u);
+      });
+      batch.commit().catch(e => console.error("Auto-update status failed:", e));
+    }
+  }, [interns, db, authUser]);
+
+  // --- DRAFT EMAIL LOGIC ---
+  const handleDraftEmail = async (intern) => {
+    if (!intern.email || intern.email.trim() === '-' || intern.email.trim() === '') {
+        setAlertMessage("Gagal: Email mahasiswa belum diisi. Silakan edit data intern (Klik icon pensil) dan tambahkan email terlebih dahulu.");
+        return;
+    }
+
+    // Dynamic Fields Data: Kini mengambil dari group (SBU/SFU) untuk posisi magang
+    const deptName = intern.group && intern.group !== '-' ? intern.group : 'Divisi Terkait';
+    const joinStr = formatDateID(intern.joinDate) !== '-' ? formatDateID(intern.joinDate) : '(Tanggal Menyusul)';
+    const finishStr = formatDateID(intern.finishDate) !== '-' ? formatDateID(intern.finishDate) : '(Tanggal Menyusul)';
+    
+    // Subject construction
+    const subject = `Internship Administration – Meratus Group (${deptName})`;
+    
+    // Body construction
+    const body = `Dear rekan mahasiswa,\n
+Selamat!
+Sehubungan dengan diterimanya Saudara/i sebagai peserta magang di Meratus Group (${deptName}) untuk periode ${joinStr} - ${finishStr}, kami mengucapkan terima kasih atas ketertarikan dan kesediaan Saudara/i untuk bergabung bersama kami.
+
+Sebagai bagian dari proses administrasi, kami mohon bantuan Saudara/i untuk melengkapi beberapa dokumen berikut:
+
+    1. Form Non-Disclosure Agreement (NDA)
+    2. Form Data Diri Peserta Magang
+
+Silakan unduh dan isi formulir melalui tautan berikut:
+https://bit.ly/administrasi-intern
+
+Mohon Saudara/i dapat mengisi dan mengumpulkan formulir tersebut sesuai dengan ketentuan yang tertera.
+Adapun batas waktu pengumpulan dokumen adalah paling lambat hari ${joinStr}.
+
+Apabila terdapat pertanyaan lebih lanjut terkait pengisian formulir, Saudara/i dapat menghubungi tim Human Resources melalui kontak yang tersedia.
+
+Demikian kami sampaikan. Atas perhatian dan kerja sama Saudara/i, kami ucapkan terima kasih. Kami menantikan kehadiran Saudara/i sebagai bagian dari proses pembelajaran dan pengembangan bersama kami.
+
+Hormat kami,
+Tim Human Resources
+Meratus Group
+`;
+
+    // Deeplink Compose untuk Outlook Web (Office 365)
+    const outlookWebLink = `https://outlook.cloud.microsoft/mail/deeplink/compose?to=${encodeURIComponent(intern.email)}&cc=meratus.academy@meratus.com&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    // Buka Outlook Web di tab baru
+    window.open(outlookWebLink, '_blank');
+
+    // Update Status tracking ke Firestore bahwa email sudah digenerate/didraft
+    try {
+        if (!authUser) return; // Prevent unauthorized writes
+        const updatedIntern = { ...intern, emailSent: true };
+        setInterns(prev => prev.map(i => i.id === intern.id ? updatedIntern : i));
+        if (db) {
+            await setDoc(getDocRef('interns', intern.id), updatedIntern);
+        }
+    } catch (error) {
+        console.error("Gagal update status tracking email:", error);
+    }
   };
 
   // --- PDF GENERATOR (SURAT KETERANGAN MAGANG) ---
@@ -313,7 +452,7 @@ export default function InternshipManagement() {
 
     } catch (error) {
       console.error("PDF Generation error: ", error);
-      alert("Terjadi kesalahan saat memproses PDF.");
+      setAlertMessage("Terjadi kesalahan saat memproses PDF.");
     }
   };
 
@@ -327,13 +466,15 @@ export default function InternshipManagement() {
   const isFinished = (intern) => {
     if (intern.internshipStatus === 'Finish') return true;
     if (!intern.finishDate || intern.finishDate === '-') return false;
-    return new Date(intern.finishDate) < todayZero;
+    const finishTime = parseDateStr(intern.finishDate);
+    return finishTime > 0 && finishTime < todayZero.getTime();
   };
 
   const isIncoming = (intern) => {
     if (intern.status !== 'Accepted') return false;
     if (!intern.joinDate || intern.joinDate === '-') return false;
-    return new Date(intern.joinDate) > todayZero;
+    const joinTime = parseDateStr(intern.joinDate);
+    return joinTime > 0 && joinTime > todayZero.getTime();
   };
 
   const isActive = (intern) => {
@@ -345,8 +486,9 @@ export default function InternshipManagement() {
 
   const isFinishingSoon = (finishDateStr) => {
     if (!finishDateStr || finishDateStr === '-') return false;
-    const finishDate = new Date(finishDateStr);
-    const diffDays = Math.ceil((finishDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+    const finishTime = parseDateStr(finishDateStr);
+    if (finishTime === 0) return false;
+    const diffDays = Math.ceil((finishTime - new Date().getTime()) / (1000 * 60 * 60 * 24));
     return diffDays >= 0 && diffDays <= 30;
   };
 
@@ -355,15 +497,16 @@ export default function InternshipManagement() {
     if (intern.status !== 'Accepted') return false;
     if (!intern.finishDate || intern.finishDate === '-') return false;
     
-    const finishDate = new Date(intern.finishDate);
-    const todayZero = new Date();
-    todayZero.setHours(0,0,0,0);
+    const finishTime = parseDateStr(intern.finishDate);
+    if (finishTime === 0) return false;
     
-    const diffDays = Math.ceil((finishDate.getTime() - todayZero.getTime()) / (1000 * 60 * 60 * 24));
-    return diffDays <= 5; // H-5 atau sudah lewat
+    const todayZeroSKM = new Date();
+    todayZeroSKM.setHours(0,0,0,0);
+    
+    const diffDays = Math.ceil((finishTime - todayZeroSKM.getTime()) / (1000 * 60 * 60 * 24));
+    return diffDays <= 5; 
   };
 
-  // 1. Definisikan state filternya terlebih dahulu sehingga bisa diakses secara berurutan
   const filteredAndSortedInterns = useMemo(() => {
     let result = [...interns];
     if (searchTerm) result = result.filter(intern => intern.name.toLowerCase().includes(searchTerm.toLowerCase()) || intern.university.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -386,37 +529,15 @@ export default function InternshipManagement() {
         let valA = a[sortConfig.key];
         let valB = b[sortConfig.key];
 
-        // Penanganan khusus untuk kolom tanggal (joinDate & finishDate)
         if (sortConfig.key === 'joinDate' || sortConfig.key === 'finishDate') {
-          const parseDateForSort = (dateStr) => {
-            if (!dateStr || dateStr === '-') return 0;
-            // Coba parsing standar YYYY-MM-DD
-            let d = new Date(dateStr).getTime();
-            if (!isNaN(d)) return d;
-            
-            // Fallback parsing untuk data teks Indonesia (contoh: "06 Juli 2026")
-            const lowerStr = dateStr.toLowerCase();
-            const months = { 'januari': 0, 'februari': 1, 'maret': 2, 'april': 3, 'mei': 4, 'juni': 5, 'juli': 6, 'agustus': 7, 'september': 8, 'oktober': 9, 'november': 10, 'desember': 11, 'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5, 'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11 };
-            let month = 0, year = 0, day = 1;
-            const yearMatch = lowerStr.match(/20\d{2}/);
-            if (yearMatch) year = parseInt(yearMatch[0]);
-            const dayMatch = lowerStr.match(/\b\d{1,2}\b/);
-            if (dayMatch) day = parseInt(dayMatch[0]);
-            for (const [mName, mNum] of Object.entries(months)) {
-              if (lowerStr.includes(mName)) { month = mNum; break; }
-            }
-            return new Date(year, month, day).getTime();
-          };
-
-          const timeA = parseDateForSort(valA);
-          const timeB = parseDateForSort(valB);
+          const timeA = parseDateStr(valA);
+          const timeB = parseDateStr(valB);
 
           if (timeA < timeB) return sortConfig.direction === 'asc' ? -1 : 1;
           if (timeA > timeB) return sortConfig.direction === 'asc' ? 1 : -1;
           return 0;
         }
 
-        // Penanganan pengurutan default (huruf/abjad)
         valA = valA ? valA.toString().toLowerCase() : '';
         valB = valB ? valB.toString().toLowerCase() : '';
 
@@ -428,7 +549,6 @@ export default function InternshipManagement() {
     return result;
   }, [interns, searchTerm, statusFilter, universityFilter, sbuFilter, timelineFilter, sortConfig]);
 
-  // 2. Kalkulasi Dashboard Data Atas agar reaktif terhadap Filter (Memakai filteredAndSortedInterns)
   const pipelineStats = useMemo(() => ({
     total: filteredAndSortedInterns.length,
     active: filteredAndSortedInterns.filter(i => isActive(i)).length,
@@ -438,13 +558,11 @@ export default function InternshipManagement() {
     rejected: filteredAndSortedInterns.filter(i => i.status === 'Rejected' || i.status === 'Reject Offer').length,
   }), [filteredAndSortedInterns]);
 
-  // 3. Kalkulasi Dashboard Dept Absorption juga reaktif dan diperhitungkan persentasenya
   const departmentAbsorption = useMemo(() => {
     const absorption = {};
     let maxCount = 0;
     
     filteredAndSortedInterns.forEach(intern => {
-      // Hanya tampilkan jika statusnya menandakan penerimaan/keberlangsungan
       if (intern.status === 'Accepted' || intern.internshipStatus === 'Active' || intern.internshipStatus === 'Finish') {
         const sbu = intern.group && intern.group !== '-' ? intern.group : 'Unassigned';
         absorption[sbu] = (absorption[sbu] || 0) + 1;
@@ -457,7 +575,7 @@ export default function InternshipManagement() {
     
     const data = Object.entries(absorption)
       .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count); // Urutkan berdasarkan penyerapan terbanyak
+      .sort((a, b) => b.count - a.count); 
       
     return { data, maxCount };
   }, [filteredAndSortedInterns]);
@@ -496,7 +614,6 @@ export default function InternshipManagement() {
       } else if (requestSortConfig === 'Urgent') {
         const getDateVal = (req) => {
           if (req.startDate) return new Date(req.startDate).getTime();
-          // Fallback parsing for old data without startDate
           const str = req.timeline || '';
           const lowerStr = str.toLowerCase();
           if (lowerStr.includes('asap') || lowerStr.includes('segera') || lowerStr.includes('urgent')) return 0;
@@ -529,13 +646,14 @@ export default function InternshipManagement() {
 
   // --- EXPORT CSV LOGIC ---
   const handleExportCSV = () => {
-    const header = ['NIM', 'Nama', 'Universitas', 'Jurusan', 'Status', 'Acceptance / Rejected Letter', 'Group SBU/SFU', 'Supervisor', 'Join Date', 'Finish Date', 'Internship Status', 'Internship Letter', 'Paid / Unpaid'];
+    const header = ['NIM', 'Nama', 'Email', 'Universitas', 'Jurusan', 'Status', 'Acceptance / Rejected Letter', 'Group SBU/SFU', 'Supervisor', 'Join Date', 'Finish Date', 'Internship Status', 'Internship Letter', 'Paid / Unpaid', 'Status Draft Email'];
     
     const csvContent = [
       header.join(','),
       ...interns.map(i => [
         `"${i.nim || '-'}"`, 
         `"${i.name}"`, 
+        `"${i.email || '-'}"`, 
         `"${i.university}"`, 
         `"${i.department}"`, 
         `"${i.status}"`, 
@@ -546,7 +664,8 @@ export default function InternshipManagement() {
         `"${i.finishDate}"`, 
         `"${i.internshipStatus}"`,
         `"-"`,
-        `"${i.paymentStatus || '-'}"`
+        `"${i.paymentStatus || '-'}"`,
+        `"${i.emailSent ? 'Sent' : 'Not Sent'}"`
       ].join(','))
     ].join('\n');
 
@@ -559,21 +678,21 @@ export default function InternshipManagement() {
   };
 
   // --- FIREBASE CRUD HANDLERS ---
-
-  const handleImportExcel = async () => {
+  const executeImportExcel = async () => {
     const rows = excelData.trim().split('\n').filter(r => r.trim() !== '');
-    if (rows.length < 2) return alert('Format tidak valid. Pastikan ada baris header dan data.');
+    if (rows.length < 2) return setAlertMessage('Format tidak valid. Pastikan ada baris header dan data.');
     
-    const confirmOverwrite = window.confirm("Peringatan: Data dari Excel akan di-import. SEMUA data Pipeline sebelumnya akan dihapus dan ditimpa secara total. Lanjutkan?");
-    if (!confirmOverwrite) return;
-
     try {
+      if (!authUser) throw new Error("Akses ditolak: User belum terautentikasi.");
+      
       const newImportedInterns = rows.slice(1).map((row, index) => {
         const cols = row.split('\t').map(c => c.trim());
         return {
           id: Date.now() + index,
           nim: cols[0] || '-', 
           name: cols[1] || 'Unknown', 
+          email: '-', // Default empty since import format might not have it yet
+          emailSent: false,
           university: cols[2] || '-', 
           department: cols[3] || '-',
           status: cols[4] || 'Process', 
@@ -590,7 +709,7 @@ export default function InternshipManagement() {
       setInterns(newImportedInterns);
 
       if (db) {
-        const internsRef = collection(db, 'interns');
+        const internsRef = getColRef('interns');
         const q = query(internsRef);
         const querySnapshot = await getDocs(q);
         const batch = writeBatch(db);
@@ -600,7 +719,7 @@ export default function InternshipManagement() {
         });
 
         newImportedInterns.forEach(intern => {
-          const docRef = doc(db, 'interns', intern.id.toString());
+          const docRef = getDocRef('interns', intern.id);
           batch.set(docRef, intern);
         });
 
@@ -609,20 +728,32 @@ export default function InternshipManagement() {
       
       setIsImportModalOpen(false); 
       setExcelData('');
-      alert('Import berhasil! Semua data Pipeline telah ditimpa dengan data dari Excel.');
+      setAlertMessage('Import berhasil! Semua data Pipeline telah ditimpa dengan data dari Excel.');
     } catch (error) {
       console.error("Gagal melakukan overwrite import: ", error);
-      alert("Terjadi kesalahan sistem saat overwrite data.");
+      setAlertMessage("Terjadi kesalahan sistem saat overwrite data. Pastikan status jaringan dan auth aktif.");
     }
+  };
+
+  const handleImportExcel = () => {
+    setConfirmAction({
+      title: "Peringatan Overwrite",
+      message: "Data dari Excel akan di-import. SEMUA data Pipeline sebelumnya akan dihapus dan ditimpa secara total. Lanjutkan?",
+      onConfirm: executeImportExcel
+    });
   };
 
   const handleSaveIntern = async (e) => {
     e.preventDefault();
+    if (!authUser) return setAlertMessage("Akses ditolak: User belum terautentikasi.");
+    
     const formData = new FormData(e.currentTarget);
     const data = {
       id: editingIntern ? editingIntern.id : Date.now(),
       name: formData.get('name'), 
       nim: formData.get('nim') || '-',
+      email: formData.get('email') || '',
+      emailSent: editingIntern ? editingIntern.emailSent : false,
       university: formData.get('university'),
       department: formData.get('department'), 
       status: formData.get('status'),
@@ -641,16 +772,17 @@ export default function InternshipManagement() {
     });
 
     if (db) {
-      try { await setDoc(doc(db, 'interns', data.id.toString()), data); } catch (e) { console.error(e) }
+      try { await setDoc(getDocRef('interns', data.id), data); } catch (e) { console.error(e) }
     }
     setIsInternModalOpen(false);
   };
 
   const handleSaveRequest = async (e) => {
     e.preventDefault();
+    if (!authUser) return setAlertMessage("Akses ditolak: User belum terautentikasi.");
+    
     const formData = new FormData(e.currentTarget);
     
-    // Format Timeline String based on Start and End Date
     const startDateRaw = formData.get('startDate');
     const endDateRaw = formData.get('endDate');
     const startDateObj = new Date(startDateRaw);
@@ -659,7 +791,6 @@ export default function InternshipManagement() {
     const endStr = endDateObj.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
     const timelineStr = `${startStr} - ${endStr}`;
 
-    // Payment Logic
     const paymentType = formData.get('payment');
     const nominal = formData.get('nominal');
     const paymentStr = paymentType === 'Paid' ? `Paid (${nominal})` : 'Unpaid';
@@ -682,20 +813,21 @@ export default function InternshipManagement() {
 
     setInternRequests(prev => [data, ...prev]);
     if (db) {
-      try { await setDoc(doc(db, 'internRequests', data.id.toString()), data); } catch (e) { console.error(e) }
+      try { await setDoc(getDocRef('internRequests', data.id), data); } catch (e) { console.error(e) }
     }
-    alert('Permintaan berhasil diajukan dan masuk ke dalam Request Dashboard!');
+    setAlertMessage('Permintaan berhasil diajukan dan masuk ke dalam Request Dashboard!');
     e.target.reset();
-    setRequestPaymentType('Unpaid'); // Reset custom state
+    setRequestPaymentType('Unpaid'); 
   };
 
   const handleUpdateRequestStatus = async (id, newStatus) => {
+    if (!authUser) return;
     const req = internRequests.find(r => r.id === id);
     if (!req) return;
     const updated = { ...req, status: newStatus };
     setInternRequests(prev => prev.map(r => r.id === id ? updated : r));
     if (db) {
-      try { await setDoc(doc(db, 'internRequests', id.toString()), updated); } catch (e) { console.error(e) }
+      try { await setDoc(getDocRef('internRequests', id), updated); } catch (e) { console.error(e) }
     }
   };
 
@@ -713,6 +845,7 @@ export default function InternshipManagement() {
 
   const handleSaveAgreement = async (e) => {
     e.preventDefault();
+    if (!authUser) return setAlertMessage("Akses ditolak: User belum terautentikasi.");
     const formData = new FormData(e.currentTarget);
     const data = {
       id: editingAgreement ? editingAgreement.id : Date.now(),
@@ -723,13 +856,14 @@ export default function InternshipManagement() {
     
     setAgreements(prev => editingAgreement ? prev.map(i => i.id === data.id ? data : i) : [data, ...prev]);
     if (db) {
-      try { await setDoc(doc(db, 'agreements', data.id.toString()), data); } catch (e) { console.error(e) }
+      try { await setDoc(getDocRef('agreements', data.id), data); } catch (e) { console.error(e) }
     }
     setIsAgreementModalOpen(false);
   };
 
   const handleSaveSchedule = async (e) => {
     e.preventDefault();
+    if (!authUser) return setAlertMessage("Akses ditolak: User belum terautentikasi.");
     const formData = new FormData(e.currentTarget);
     const selectedMonths = Array.from({length: 12}, (_, i) => i).filter(i => formData.get(`month_${i}`));
     const data = {
@@ -741,13 +875,14 @@ export default function InternshipManagement() {
     
     setSchedules(prev => editingSchedule ? prev.map(i => i.id === data.id ? data : i) : [data, ...prev]);
     if (db) {
-      try { await setDoc(doc(db, 'schedules', data.id.toString()), data); } catch (e) { console.error(e) }
+      try { await setDoc(getDocRef('schedules', data.id), data); } catch (e) { console.error(e) }
     }
     setIsScheduleModalOpen(false);
   };
 
   const handleSaveContact = async (e) => {
     e.preventDefault();
+    if (!authUser) return setAlertMessage("Akses ditolak: User belum terautentikasi.");
     const formData = new FormData(e.currentTarget);
     const data = {
       id: editingContact ? editingContact.id : Date.now(),
@@ -757,7 +892,7 @@ export default function InternshipManagement() {
     
     setContacts(prev => editingContact ? prev.map(i => i.id === data.id ? data : i) : [data, ...prev]);
     if (db) {
-      try { await setDoc(doc(db, 'contacts', data.id.toString()), data); } catch (e) { console.error(e) }
+      try { await setDoc(getDocRef('contacts', data.id), data); } catch (e) { console.error(e) }
     }
     setIsContactModalOpen(false);
   };
@@ -766,6 +901,7 @@ export default function InternshipManagement() {
   
   const handleSaveVisit = async (e) => {
     e.preventDefault();
+    if (!authUser) return setAlertMessage("Akses ditolak: User belum terautentikasi.");
     const formData = new FormData(e.currentTarget);
     const data = {
       id: editingVisit ? editingVisit.id : Date.now(),
@@ -775,13 +911,14 @@ export default function InternshipManagement() {
     
     setSiteVisits(prev => editingVisit ? prev.map(i => i.id === data.id ? data : i) : [data, ...prev]);
     if (db) {
-      try { await setDoc(doc(db, 'siteVisits', data.id.toString()), data); } catch (e) { console.error(e) }
+      try { await setDoc(getDocRef('siteVisits', data.id), data); } catch (e) { console.error(e) }
     }
     setIsVisitModalOpen(false);
   };
 
   const handleSaveVisitContact = async (e) => {
     e.preventDefault();
+    if (!authUser) return setAlertMessage("Akses ditolak: User belum terautentikasi.");
     const formData = new FormData(e.currentTarget);
     const data = {
       id: editingVisitContact ? editingVisitContact.id : Date.now(),
@@ -791,13 +928,14 @@ export default function InternshipManagement() {
     
     setVisitContacts(prev => editingVisitContact ? prev.map(i => i.id === data.id ? data : i) : [data, ...prev]);
     if (db) {
-      try { await setDoc(doc(db, 'visitContacts', data.id.toString()), data); } catch (e) { console.error(e) }
+      try { await setDoc(getDocRef('visitContacts', data.id), data); } catch (e) { console.error(e) }
     }
     setIsVisitContactModalOpen(false);
   };
 
   const handleSaveSOP = async (e) => {
     e.preventDefault();
+    if (!authUser) return setAlertMessage("Akses ditolak: User belum terautentikasi.");
     const formData = new FormData(e.currentTarget);
     const bulletsRaw = formData.get('bullets');
     const bullets = bulletsRaw ? bulletsRaw.split('\n').filter(b => b.trim() !== '') : [];
@@ -822,7 +960,7 @@ export default function InternshipManagement() {
           updatedSOP.subSections = editingSop.subSections;
         }
       } catch (err) {
-        alert('Format JSON Sub-Sections tidak valid! Silakan perbaiki struktur kurung kurawal/siku.');
+        setAlertMessage('Format JSON Sub-Sections tidak valid! Silakan perbaiki struktur kurung kurawal/siku.');
         return; 
       }
     }
@@ -836,7 +974,7 @@ export default function InternshipManagement() {
     if (db) {
       try { 
         const collectionName = editingSopType === 'intern' ? 'internSOP' : 'visitSOP';
-        await setDoc(doc(db, collectionName, newId.toString()), updatedSOP); 
+        await setDoc(getDocRef(collectionName, newId), updatedSOP); 
       } catch (e) { console.error(e) }
     }
     
@@ -844,7 +982,7 @@ export default function InternshipManagement() {
   };
 
   const executeDelete = async () => {
-    if (!itemToDelete) return;
+    if (!itemToDelete || !authUser) return;
     const { type, id } = itemToDelete;
     
     const settersMap = {
@@ -874,7 +1012,7 @@ export default function InternshipManagement() {
     settersMap[type](prev => prev.filter(i => i.id !== id));
 
     if (db) {
-      try { await deleteDoc(doc(db, collectionMap[type], id.toString())); } catch (e) { console.error(e) }
+      try { await deleteDoc(getDocRef(collectionMap[type], id)); } catch (e) { console.error(e) }
     }
 
     setItemToDelete(null);
@@ -883,8 +1021,40 @@ export default function InternshipManagement() {
   const currentSop = editingSop || {};
 
   return (
-    <div className="p-4 md:p-8 space-y-8 bg-slate-50 min-h-screen font-sans text-slate-900">
+    <div className="p-4 md:p-8 space-y-8 bg-slate-50 min-h-screen font-sans text-slate-900 relative">
       
+      {/* Global Modals / Toasts */}
+      {alertMessage && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-blue-500" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">Informasi</h3>
+            <p className="text-sm text-slate-600 mb-6">{alertMessage}</p>
+            <button onClick={() => setAlertMessage(null)} className="w-full px-4 py-3 bg-blue-600 text-white rounded-xl font-semibold shadow-sm hover:bg-blue-700 transition-colors">
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmAction && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-amber-500" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">{confirmAction.title || "Konfirmasi"}</h3>
+            <p className="text-sm text-slate-600 mb-6">{confirmAction.message}</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmAction(null)} className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition-colors">Batal</button>
+              <button onClick={() => { confirmAction.onConfirm(); setConfirmAction(null); }} className="flex-1 px-4 py-3 bg-amber-600 text-white rounded-xl font-semibold hover:bg-amber-700 shadow-sm transition-colors">Lanjutkan</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Section dengan Gatekeeping Logic */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -1059,6 +1229,7 @@ export default function InternshipManagement() {
                           {intern.source === 'system' && <span title="Ditambahkan via Sistem" className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>}
                         </div>
                         {intern.nim && intern.nim !== '-' && <div className="text-xs text-slate-500 font-mono mt-0.5">{intern.nim}</div>}
+                        {intern.email && intern.email !== '-' && <div className="text-[10px] text-blue-500 mt-0.5" title={intern.email}>{intern.email}</div>}
                       </td>
                       <td className="px-6 py-4 text-slate-600">{intern.university}</td>
                       <td className="px-6 py-4 text-slate-600">{intern.department}</td>
@@ -1084,11 +1255,26 @@ export default function InternshipManagement() {
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           
+                          {/* TOMBOL EMAIL BARU */}
+                          {intern.status === 'Accepted' && (
+                             <button 
+                                onClick={() => handleDraftEmail(intern)} 
+                                title={intern.emailSent ? "Email penawaran pernah dibuat/dikirim" : "Kirim Email Penawaran & Administrasi (Via Outlook)"}
+                                className={`p-1.5 rounded-lg transition-colors border flex items-center ${
+                                   intern.emailSent 
+                                   ? "text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-600 hover:text-white" 
+                                   : "text-blue-600 bg-blue-50 border-blue-200 hover:bg-blue-600 hover:text-white"
+                                }`}
+                             >
+                                <Mail className="w-4 h-4"/>
+                             </button>
+                          )}
+
                           {canDownloadSKM(intern) && (
                             <button 
                               onClick={() => handleDownloadSKM(intern)} 
                               title="Download Surat Keterangan Magang (PDF)"
-                              className="p-1.5 text-emerald-600 hover:text-white hover:bg-emerald-600 rounded-lg transition-colors border border-transparent hover:border-emerald-600 flex items-center bg-emerald-50"
+                              className="p-1.5 text-purple-600 hover:text-white hover:bg-purple-600 rounded-lg transition-colors border border-purple-200 bg-purple-50 flex items-center"
                             >
                               <DownloadCloud className="w-4 h-4"/>
                             </button>
@@ -1808,7 +1994,7 @@ export default function InternshipManagement() {
       )}
 
       {/* ======================================= */}
-      {/* UNIVERSAL MODALS                        */}
+      {/* FORM MODALS                               */}
       {/* ======================================= */}
       
       {/* Login Admin Modal */}
@@ -1921,23 +2107,6 @@ export default function InternshipManagement() {
         </div>
       )}
 
-      {/* Delete Confirmation */}
-      {itemToDelete !== null && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 text-center border border-slate-100">
-            <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-5">
-              <Trash2 className="w-8 h-8 text-red-500" />
-            </div>
-            <h2 className="text-xl font-extrabold text-slate-900 mb-2">Konfirmasi Hapus</h2>
-            <p className="text-sm text-slate-500 mb-8">Apakah Anda yakin ingin menghapus data ini? Tindakan ini tidak dapat dibatalkan.</p>
-            <div className="flex justify-center gap-3">
-              <button onClick={() => setItemToDelete(null)} className="flex-1 px-4 py-3 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl font-semibold transition-colors">Batal</button>
-              <button onClick={executeDelete} className="flex-1 px-4 py-3 bg-red-600 text-white hover:bg-red-700 rounded-xl font-semibold shadow-sm transition-colors">Ya, Hapus</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Import Excel */}
       {isImportModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1976,6 +2145,13 @@ export default function InternshipManagement() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Nama Mahasiswa</label><input required name="name" defaultValue={editingIntern?.name} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
                   <div><label className="block text-sm font-bold text-slate-700 mb-1.5">NIM / NIS (Untuk SKM)</label><input name="nim" defaultValue={editingIntern?.nim} placeholder="Boleh dikosongkan..." className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Email Mahasiswa (Untuk Draft Otomatis)</label>
+                    <input type="email" name="email" defaultValue={editingIntern?.email && editingIntern?.email !== '-' ? editingIntern?.email : ''} placeholder="contoh: mahasiswa@univ.ac.id" className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -2173,7 +2349,7 @@ export default function InternshipManagement() {
             </form>
           </div>
         </div>
-      )}
+      )} 
 
       {/* --- KOMPONEN AI ASSISTANT (Berjalan lokal) --- */}
       <AIAssistant />
