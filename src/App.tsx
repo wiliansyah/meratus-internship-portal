@@ -646,11 +646,12 @@ Meratus Group
 
   // --- EXPORT CSV LOGIC ---
   const handleExportCSV = () => {
-    const header = ['NIM', 'Nama', 'Email', 'Universitas', 'Jurusan', 'Status', 'Acceptance / Rejected Letter', 'Group SBU/SFU', 'Supervisor', 'Join Date', 'Finish Date', 'Internship Status', 'Internship Letter', 'Paid / Unpaid', 'Status Draft Email'];
+    const header = ['ID', 'NIM', 'Nama', 'Email', 'Universitas', 'Jurusan', 'Status', 'Acceptance / Rejected Letter', 'Group SBU/SFU', 'Supervisor', 'Join Date', 'Finish Date', 'Internship Status', 'Internship Letter', 'Paid / Unpaid', 'Status Draft Email'];
     
     const csvContent = [
       header.join(','),
       ...interns.map(i => [
+        `"${i.id}"`,
         `"${i.nim || '-'}"`, 
         `"${i.name}"`, 
         `"${i.email || '-'}"`, 
@@ -685,23 +686,65 @@ Meratus Group
     try {
       if (!authUser) throw new Error("Akses ditolak: User belum terautentikasi.");
       
+      const parseCSVRow = (row) => {
+        const cols = [];
+        let curr = '';
+        let inQuotes = false;
+        const sep = row.indexOf('\t') !== -1 && row.indexOf(',') === -1 ? '\t' : ',';
+        for (let i = 0; i < row.length; i++) {
+          const char = row[i];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === sep && !inQuotes) {
+            cols.push(curr.trim().replace(/^"|"$/g, ''));
+            curr = '';
+          } else {
+            curr += char;
+          }
+        }
+        cols.push(curr.trim().replace(/^"|"$/g, ''));
+        return cols;
+      };
+
+      const headerRow = parseCSVRow(rows[0]).map(h => h.toLowerCase());
+      const getIdx = (keywords) => headerRow.findIndex(h => keywords.some(k => h.includes(k)));
+
+      const idxId = getIdx(['id']);
+      const idxNim = getIdx(['nim']);
+      const idxName = getIdx(['nama', 'name']);
+      const idxEmail = getIdx(['email']);
+      const idxUniv = getIdx(['univ', 'universitas']);
+      const idxDept = getIdx(['jurus', 'dept']);
+      const idxStatus = headerRow.findIndex(h => h === 'status');
+      const idxGroup = getIdx(['group', 'sbu', 'sfu']);
+      const idxSpv = getIdx(['superv']);
+      const idxJoin = getIdx(['join date']);
+      const idxFinish = getIdx(['finish date']);
+      const idxIntStatus = getIdx(['internship status']);
+      const idxPaid = getIdx(['paid', 'unpaid']);
+      const idxDraft = getIdx(['draft']);
+
       const newImportedInterns = rows.slice(1).map((row, index) => {
-        const cols = row.split('\t').map(c => c.trim());
+        const cols = parseCSVRow(row);
+        
+        const rawId = idxId !== -1 ? cols[idxId] : null;
+        const parsedId = rawId ? Number(rawId) : null;
+
         return {
-          id: Date.now() + index,
-          nim: cols[0] || '-', 
-          name: cols[1] || 'Unknown', 
-          email: '-', // Default empty since import format might not have it yet
-          emailSent: false,
-          university: cols[2] || '-', 
-          department: cols[3] || '-',
-          status: cols[4] || 'Process', 
-          group: cols[6] || '-', 
-          supervisor: cols[7] || '-',
-          joinDate: cols[8] || '-', 
-          finishDate: cols[9] || '-', 
-          internshipStatus: cols[10] || '-',
-          paymentStatus: cols[12] || cols[11] || '-', 
+          id: parsedId || (Date.now() + index),
+          nim: idxNim !== -1 && cols[idxNim] ? cols[idxNim] : '-', 
+          name: idxName !== -1 && cols[idxName] ? cols[idxName] : 'Unknown', 
+          email: idxEmail !== -1 && cols[idxEmail] ? cols[idxEmail] : '-',
+          emailSent: idxDraft !== -1 && cols[idxDraft] && cols[idxDraft].toLowerCase() === 'sent',
+          university: idxUniv !== -1 && cols[idxUniv] ? cols[idxUniv] : '-', 
+          department: idxDept !== -1 && cols[idxDept] ? cols[idxDept] : '-',
+          status: idxStatus !== -1 && cols[idxStatus] ? cols[idxStatus] : 'Process', 
+          group: idxGroup !== -1 && cols[idxGroup] ? cols[idxGroup] : '-', 
+          supervisor: idxSpv !== -1 && cols[idxSpv] ? cols[idxSpv] : '-',
+          joinDate: idxJoin !== -1 && cols[idxJoin] ? cols[idxJoin] : '-', 
+          finishDate: idxFinish !== -1 && cols[idxFinish] ? cols[idxFinish] : '-', 
+          internshipStatus: idxIntStatus !== -1 && cols[idxIntStatus] ? cols[idxIntStatus] : '-',
+          paymentStatus: idxPaid !== -1 && cols[idxPaid] ? cols[idxPaid] : '-', 
           source: 'import' 
         };
       });
@@ -712,18 +755,39 @@ Meratus Group
         const internsRef = getColRef('interns');
         const q = query(internsRef);
         const querySnapshot = await getDocs(q);
-        const batch = writeBatch(db);
+        
+        const batches = [];
+        let currentBatch = writeBatch(db);
+        let opCount = 0;
         
         querySnapshot.forEach((document) => {
-          batch.delete(document.ref);
+          currentBatch.delete(document.ref);
+          opCount++;
+          if (opCount === 500) {
+            batches.push(currentBatch);
+            currentBatch = writeBatch(db);
+            opCount = 0;
+          }
         });
 
         newImportedInterns.forEach(intern => {
           const docRef = getDocRef('interns', intern.id);
-          batch.set(docRef, intern);
+          currentBatch.set(docRef, intern);
+          opCount++;
+          if (opCount === 500) {
+            batches.push(currentBatch);
+            currentBatch = writeBatch(db);
+            opCount = 0;
+          }
         });
 
-        await batch.commit();
+        if (opCount > 0) {
+          batches.push(currentBatch);
+        }
+
+        for (const b of batches) {
+          await b.commit();
+        }
       }
       
       setIsImportModalOpen(false); 
