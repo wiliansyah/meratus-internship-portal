@@ -646,12 +646,11 @@ Meratus Group
 
   // --- EXPORT CSV LOGIC ---
   const handleExportCSV = () => {
-    const header = ['ID', 'NIM', 'Nama', 'Email', 'Universitas', 'Jurusan', 'Status', 'Acceptance / Rejected Letter', 'Group SBU/SFU', 'Supervisor', 'Join Date', 'Finish Date', 'Internship Status', 'Internship Letter', 'Paid / Unpaid', 'Status Draft Email'];
+    const header = ['NIM', 'Nama', 'Email', 'Universitas', 'Jurusan', 'Status', 'Acceptance / Rejected Letter', 'Group SBU/SFU', 'Supervisor', 'Join Date', 'Finish Date', 'Internship Status', 'Internship Letter', 'Paid / Unpaid', 'Status Draft Email'];
     
     const csvContent = [
       header.join(','),
       ...interns.map(i => [
-        `"${i.id}"`,
         `"${i.nim || '-'}"`, 
         `"${i.name}"`, 
         `"${i.email || '-'}"`, 
@@ -686,108 +685,82 @@ Meratus Group
     try {
       if (!authUser) throw new Error("Akses ditolak: User belum terautentikasi.");
       
-      const parseCSVRow = (row) => {
-        const cols = [];
-        let curr = '';
-        let inQuotes = false;
-        const sep = row.indexOf('\t') !== -1 && row.indexOf(',') === -1 ? '\t' : ',';
-        for (let i = 0; i < row.length; i++) {
-          const char = row[i];
-          if (char === '"') {
-            inQuotes = !inQuotes;
-          } else if (char === sep && !inQuotes) {
-            cols.push(curr.trim().replace(/^"|"$/g, ''));
-            curr = '';
-          } else {
-            curr += char;
-          }
-        }
-        cols.push(curr.trim().replace(/^"|"$/g, ''));
-        return cols;
-      };
-
-      const headerRow = parseCSVRow(rows[0]).map(h => h.toLowerCase());
-      const getIdx = (keywords) => headerRow.findIndex(h => keywords.some(k => h.includes(k)));
-
-      const idxId = getIdx(['id']);
-      const idxNim = getIdx(['nim']);
-      const idxName = getIdx(['nama', 'name']);
-      const idxEmail = getIdx(['email']);
-      const idxUniv = getIdx(['univ', 'universitas']);
-      const idxDept = getIdx(['jurus', 'dept']);
-      const idxStatus = headerRow.findIndex(h => h === 'status');
-      const idxGroup = getIdx(['group', 'sbu', 'sfu']);
-      const idxSpv = getIdx(['superv']);
-      const idxJoin = getIdx(['join date']);
-      const idxFinish = getIdx(['finish date']);
-      const idxIntStatus = getIdx(['internship status']);
-      const idxPaid = getIdx(['paid', 'unpaid']);
-      const idxDraft = getIdx(['draft']);
+      const internsRef = getColRef('interns');
+      const q = query(internsRef);
+      const querySnapshot = await getDocs(q);
+      const existingInterns = querySnapshot.docs.map(doc => doc.data());
 
       const newImportedInterns = rows.slice(1).map((row, index) => {
-        const cols = parseCSVRow(row);
+        const tabs = (row.match(/\t/g) || []).length;
+        const semicolons = (row.match(/;/g) || []).length;
+        const commas = (row.match(/,/g) || []).length;
         
-        const rawId = idxId !== -1 ? cols[idxId] : null;
-        const parsedId = rawId ? Number(rawId) : null;
+        let separator = ',';
+        if (tabs > commas && tabs > semicolons) separator = '\t';
+        else if (semicolons > commas && semicolons > tabs) separator = ';';
+
+        let cols = [];
+        let curr = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < row.length; i++) {
+            let char = row[i];
+            
+            if (char === '"') {
+                if (inQuotes && row[i + 1] === '"') {
+                    curr += '"';
+                    i++;
+                } else {
+                    inQuotes = !inQuotes;
+                }
+            } else if (char === separator && !inQuotes) {
+                cols.push(curr.trim());
+                curr = '';
+            } else {
+                curr += char;
+            }
+        }
+        cols.push(curr.trim());
+        const cleanCols = cols.map(c => c.trim());
+
+        const nim = cleanCols[0] || '-';
+        const name = cleanCols[1] || 'Unknown';
+        const existing = existingInterns.find(i => i.name === name && (i.nim === nim || nim === '-'));
 
         return {
-          id: parsedId || (Date.now() + index),
-          nim: idxNim !== -1 && cols[idxNim] ? cols[idxNim] : '-', 
-          name: idxName !== -1 && cols[idxName] ? cols[idxName] : 'Unknown', 
-          email: idxEmail !== -1 && cols[idxEmail] ? cols[idxEmail] : '-',
-          emailSent: idxDraft !== -1 && cols[idxDraft] && cols[idxDraft].toLowerCase() === 'sent',
-          university: idxUniv !== -1 && cols[idxUniv] ? cols[idxUniv] : '-', 
-          department: idxDept !== -1 && cols[idxDept] ? cols[idxDept] : '-',
-          status: idxStatus !== -1 && cols[idxStatus] ? cols[idxStatus] : 'Process', 
-          group: idxGroup !== -1 && cols[idxGroup] ? cols[idxGroup] : '-', 
-          supervisor: idxSpv !== -1 && cols[idxSpv] ? cols[idxSpv] : '-',
-          joinDate: idxJoin !== -1 && cols[idxJoin] ? cols[idxJoin] : '-', 
-          finishDate: idxFinish !== -1 && cols[idxFinish] ? cols[idxFinish] : '-', 
-          internshipStatus: idxIntStatus !== -1 && cols[idxIntStatus] ? cols[idxIntStatus] : '-',
-          paymentStatus: idxPaid !== -1 && cols[idxPaid] ? cols[idxPaid] : '-', 
-          source: 'import' 
+          id: existing ? existing.id : Date.now() + index,
+          nim: nim, 
+          name: name, 
+          email: cleanCols[2] && cleanCols[2] !== '-' ? cleanCols[2] : '-', 
+          emailSent: cleanCols[14] === 'Sent',
+          university: cleanCols[3] || '-', 
+          department: cleanCols[4] || '-',
+          status: cleanCols[5] || 'Process', 
+          group: cleanCols[7] || '-', 
+          supervisor: cleanCols[8] || '-',
+          joinDate: cleanCols[9] || '-', 
+          finishDate: cleanCols[10] || '-', 
+          internshipStatus: cleanCols[11] || '-',
+          paymentStatus: cleanCols[13] || '-', 
+          source: existing ? existing.source : 'import' 
         };
       });
 
       setInterns(newImportedInterns);
 
       if (db) {
-        const internsRef = getColRef('interns');
-        const q = query(internsRef);
-        const querySnapshot = await getDocs(q);
-        
-        const batches = [];
-        let currentBatch = writeBatch(db);
-        let opCount = 0;
+        const batch = writeBatch(db);
         
         querySnapshot.forEach((document) => {
-          currentBatch.delete(document.ref);
-          opCount++;
-          if (opCount === 500) {
-            batches.push(currentBatch);
-            currentBatch = writeBatch(db);
-            opCount = 0;
-          }
+          batch.delete(document.ref);
         });
 
         newImportedInterns.forEach(intern => {
           const docRef = getDocRef('interns', intern.id);
-          currentBatch.set(docRef, intern);
-          opCount++;
-          if (opCount === 500) {
-            batches.push(currentBatch);
-            currentBatch = writeBatch(db);
-            opCount = 0;
-          }
+          batch.set(docRef, intern);
         });
 
-        if (opCount > 0) {
-          batches.push(currentBatch);
-        }
-
-        for (const b of batches) {
-          await b.commit();
-        }
+        await batch.commit();
       }
       
       setIsImportModalOpen(false); 
@@ -1114,6 +1087,22 @@ Meratus Group
             <div className="flex gap-3">
               <button onClick={() => setConfirmAction(null)} className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition-colors">Batal</button>
               <button onClick={() => { confirmAction.onConfirm(); setConfirmAction(null); }} className="flex-1 px-4 py-3 bg-amber-600 text-white rounded-xl font-semibold hover:bg-amber-700 shadow-sm transition-colors">Lanjutkan</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {itemToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-8 h-8 text-red-500" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">Konfirmasi Hapus</h3>
+            <p className="text-sm text-slate-600 mb-6">Apakah Anda yakin ingin menghapus data ini? Tindakan ini tidak dapat dibatalkan.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setItemToDelete(null)} className="flex-1 px-4 py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition-colors">Batal</button>
+              <button onClick={executeDelete} className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 shadow-sm transition-colors">Hapus</button>
             </div>
           </div>
         </div>
@@ -2263,8 +2252,8 @@ Meratus Group
               <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-2"><Calendar className="w-4 h-4"/> Periode Pelaksanaan</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Join Date</label><input type="date" name="joinDate" defaultValue={editingIntern?.joinDate} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
-                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Finish Date</label><input type="date" name="finishDate" defaultValue={editingIntern?.finishDate} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
+                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Join Date</label><input type="text" placeholder="Ex: 12 Jan 2024" name="joinDate" defaultValue={editingIntern?.joinDate} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
+                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Finish Date</label><input type="text" placeholder="Ex: 12 Jun 2024" name="finishDate" defaultValue={editingIntern?.finishDate} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
                 </div>
               </div>
 
