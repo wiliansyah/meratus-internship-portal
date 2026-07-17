@@ -7,7 +7,7 @@ import {
   BookOpen, Clock, CheckCircle2, XCircle, ArrowUpDown, AlertCircle,
   Edit2, Trash2, MapPin, ListTodo, Presentation, Camera,
   Shield, Award, DollarSign, UserCheck, PenTool, ClipboardCheck, Database, Settings, Briefcase, DownloadCloud,
-  Send, Inbox, Lock, Unlock, KeyRound, Mail
+  Send, Inbox, Lock, Unlock, KeyRound, Mail, BarChart3
 } from 'lucide-react';
 
 // --- MOCK COMPONENTS ---
@@ -98,6 +98,11 @@ const getStatusBadge = (status) => {
   }
 };
 
+// --- HELPER FORMAT CURRENCY ---
+const formatRp = (num) => {
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num);
+};
+
 // --- HELPER PARSE TANGGAL ---
 const parseDateStr = (dateStr) => {
   if (!dateStr || dateStr === '-') return 0;
@@ -152,7 +157,6 @@ export default function InternshipManagement() {
 
   // --- FIREBASE AUTH INITIALIZATION ---
   useEffect(() => {
-    // Memaksa Anonymous Login langsung ke project Firebase Anda (mengabaikan token platform)
     signInAnonymously(auth).catch(console.error);
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -208,6 +212,7 @@ export default function InternshipManagement() {
   const [universityFilter, setUniversityFilter] = useState('All');
   const [sbuFilter, setSbuFilter] = useState('All');
   const [timelineFilter, setTimelineFilter] = useState('All');
+  const [paymentFilter, setPaymentFilter] = useState('All'); 
   const [sortConfig, setSortConfig] = useState(null);
   
   // -- REQUESTS TAB FILTER & STATE --
@@ -221,6 +226,8 @@ export default function InternshipManagement() {
   const [isInternModalOpen, setIsInternModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingIntern, setEditingIntern] = useState(null);
+  const [modalPaymentStatus, setModalPaymentStatus] = useState('-'); 
+  const [modalDailyAllowance, setModalDailyAllowance] = useState(''); 
   const [excelData, setExcelData] = useState('');
   
   const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
@@ -269,6 +276,21 @@ export default function InternshipManagement() {
       script.onerror = () => {
         setAlertMessage("Gagal memuat sistem pembuat PDF. Pastikan koneksi internet Anda stabil.");
         reject(new Error("Failed to load jsPDF script"));
+      };
+      document.body.appendChild(script);
+    });
+  };
+
+  // --- DYNAMIC EXCELJS LOADER (NEW!) ---
+  const loadExcelJS = async () => {
+    if (window.ExcelJS) return window.ExcelJS;
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
+      script.onload = () => resolve(window.ExcelJS);
+      script.onerror = () => {
+        setAlertMessage("Gagal memuat sistem Excel. Pastikan koneksi internet Anda stabil.");
+        reject(new Error("Failed to load ExcelJS script"));
       };
       document.body.appendChild(script);
     });
@@ -329,15 +351,11 @@ export default function InternshipManagement() {
         return;
     }
 
-    // Dynamic Fields Data: Kini mengambil dari group (SBU/SFU) untuk posisi magang
     const deptName = intern.group && intern.group !== '-' ? intern.group : 'Divisi Terkait';
     const joinStr = formatDateID(intern.joinDate) !== '-' ? formatDateID(intern.joinDate) : '(Tanggal Menyusul)';
     const finishStr = formatDateID(intern.finishDate) !== '-' ? formatDateID(intern.finishDate) : '(Tanggal Menyusul)';
     
-    // Subject construction
     const subject = `Internship Administration – Meratus Group (${deptName})`;
-    
-    // Body construction
     const body = `Dear rekan mahasiswa,\n
 Selamat!
 Sehubungan dengan diterimanya Saudara/i sebagai peserta magang di Meratus Group (${deptName}) untuk periode ${joinStr} - ${finishStr}, kami mengucapkan terima kasih atas ketertarikan dan kesediaan Saudara/i untuk bergabung bersama kami.
@@ -362,15 +380,11 @@ Tim Human Resources
 Meratus Group
 `;
 
-    // Deeplink Compose untuk Outlook Web (Office 365)
     const outlookWebLink = `https://outlook.cloud.microsoft/mail/deeplink/compose?to=${encodeURIComponent(intern.email)}&cc=meratus.academy@meratus.com&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-    // Buka Outlook Web di tab baru
     window.open(outlookWebLink, '_blank');
 
-    // Update Status tracking ke Firestore bahwa email sudah digenerate/didraft
     try {
-        if (!authUser) return; // Prevent unauthorized writes
+        if (!authUser) return; 
         const updatedIntern = { ...intern, emailSent: true };
         setInterns(prev => prev.map(i => i.id === intern.id ? updatedIntern : i));
         if (db) {
@@ -400,11 +414,9 @@ Meratus Group
       const joinStr = formatDateID(intern.joinDate);
       const finishStr = formatDateID(intern.finishDate);
 
-      // Document Settings
       doc.setFont("times", "normal");
       doc.setFontSize(12);
 
-      // Header Section
       doc.text(`No.: ${docNumber}`, margin, y); 
       doc.text(`Surabaya, ${todayFormatted}`, 185, y, { align: 'right' });
       
@@ -416,17 +428,14 @@ Meratus Group
       doc.text(`Ketua Program Studi / Jurusan ${intern.department}`, margin, y); y += 6;
       doc.text(`${intern.university}`, margin, y); y += 12;
 
-      // Body Section
       doc.text(`Dengan hormat,`, margin, y); y += 8;
       doc.text(`Bersama ini kami menyampaikan bahwa:`, margin, y); y += 10;
 
-      // Identity Section
       doc.text(`Nama`, margin + 10, y);
       doc.text(`: ${intern.name}`, margin + 35, y); y += 7;
       doc.text(`NIM/NIS`, margin + 10, y);
       doc.text(`: ${intern.nim || '-'}`, margin + 35, y); y += 12;
 
-      // Content Sentences
       const body1 = `telah melakukan program magang di PT. Meratus Line dengan penempatan di departemen ${intern.group} terhitung sejak tanggal ${joinStr} - ${finishStr}.`;
       doc.text(body1, margin, y, { maxWidth: 160, align: 'justify' });
       y += (doc.splitTextToSize(body1, 160).length * 6) + 4;
@@ -439,7 +448,6 @@ Meratus Group
       doc.text(body3, margin, y, { maxWidth: 160, align: 'justify' });
       y += (doc.splitTextToSize(body3, 160).length * 6) + 20;
 
-      // Sign-off
       doc.text(`Hormat kami,`, margin, y); y += 25;
       doc.setFont("times", "bold");
       doc.text(`Andrew Fatah Erlangga`, margin, y); y += 6;
@@ -447,7 +455,6 @@ Meratus Group
       doc.text(`Head of Learning, Culture & People Development`, margin, y); y += 6;
       doc.text(`PT. Meratus Line`, margin, y);
 
-      // Save PDF
       doc.save(`SKM_${intern.name.replace(/\s+/g, '_')}_${yearStr}.pdf`);
 
     } catch (error) {
@@ -456,7 +463,6 @@ Meratus Group
     }
   };
 
-  // --- PIPELINE TIMELINE LOGIC ---
   const uniqueUniversities = useMemo(() => Array.from(new Set(interns.map(i => i.university))).filter(u => u !== '-'), [interns]);
   const uniqueSBUs = useMemo(() => Array.from(new Set(interns.map(i => i.group))).filter(g => g !== '-'), [interns]);
 
@@ -514,6 +520,10 @@ Meratus Group
     if (universityFilter !== 'All') result = result.filter(intern => intern.university === universityFilter);
     if (sbuFilter !== 'All') result = result.filter(intern => intern.group === sbuFilter);
     
+    if (paymentFilter !== 'All') {
+      result = result.filter(intern => intern.paymentStatus === paymentFilter);
+    }
+
     if (timelineFilter !== 'All') {
       result = result.filter(intern => {
         if (timelineFilter === 'Incoming') return isIncoming(intern);
@@ -547,7 +557,7 @@ Meratus Group
       });
     }
     return result;
-  }, [interns, searchTerm, statusFilter, universityFilter, sbuFilter, timelineFilter, sortConfig]);
+  }, [interns, searchTerm, statusFilter, universityFilter, sbuFilter, paymentFilter, timelineFilter, sortConfig]);
 
   const pipelineStats = useMemo(() => ({
     total: filteredAndSortedInterns.length,
@@ -557,6 +567,17 @@ Meratus Group
     finishingSoon: filteredAndSortedInterns.filter(i => i.status === 'Accepted' && isFinishingSoon(i.finishDate)).length,
     rejected: filteredAndSortedInterns.filter(i => i.status === 'Rejected' || i.status === 'Reject Offer').length,
   }), [filteredAndSortedInterns]);
+
+  // CALCULATE TOTAL MONTHLY BUDGET FOR PAID INTERNS
+  const totalMonthlyBudget = useMemo(() => {
+    return filteredAndSortedInterns.reduce((sum, intern) => {
+      if ((intern.status === 'Accepted' && intern.internshipStatus !== 'Resigned' && intern.internshipStatus !== 'Finish') && intern.paymentStatus === 'Paid') {
+        const daily = Number(intern.dailyAllowance) || 0;
+        return sum + (daily * 22); 
+      }
+      return sum;
+    }, 0);
+  }, [filteredAndSortedInterns]);
 
   const departmentAbsorption = useMemo(() => {
     const absorption = {};
@@ -644,40 +665,180 @@ Meratus Group
     setSortConfig({ key, direction: sortConfig?.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc' });
   };
 
-  // --- EXPORT CSV LOGIC ---
-  const handleExportCSV = () => {
-    const header = ['NIM', 'Nama', 'Email', 'Universitas', 'Jurusan', 'Status', 'Acceptance / Rejected Letter', 'Group SBU/SFU', 'Supervisor', 'Join Date', 'Finish Date', 'Internship Status', 'Internship Letter', 'Paid / Unpaid', 'Status Draft Email'];
-    
-    const csvContent = [
-      header.join(','),
-      ...interns.map(i => [
-        `"${i.nim || '-'}"`, 
-        `"${i.name}"`, 
-        `"${i.email || '-'}"`, 
-        `"${i.university}"`, 
-        `"${i.department}"`, 
-        `"${i.status}"`, 
-        `"-"`, 
-        `"${i.group}"`, 
-        `"${i.supervisor}"`, 
-        `"${i.joinDate}"`, 
-        `"${i.finishDate}"`, 
-        `"${i.internshipStatus}"`,
-        `"-"`,
-        `"${i.paymentStatus || '-'}"`,
-        `"${i.emailSent ? 'Sent' : 'Not Sent'}"`
-      ].join(','))
-    ].join('\n');
+  // --- EXPORT EXCEL DASHBOARD LOGIC (NEW REPLACEMENT FOR CSV) ---
+  const handleExportExcelDashboard = async () => {
+    try {
+      // 1. Load ExcelJS dynamically
+      const ExcelJS = await loadExcelJS();
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Meratus Academy System';
+      workbook.created = new Date();
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Pipeline_Interns_${new Date().toISOString().slice(0,10)}.csv`;
-    link.click();
+      // --- SHEET 1: DASHBOARD SUMMARY ---
+      const wsDash = workbook.addWorksheet('Dashboard Summary', { views: [{ showGridLines: false }] });
+      
+      // Setup Columns widths for Dashboard
+      wsDash.getColumn('A').width = 30;
+      wsDash.getColumn('B').width = 25;
+      wsDash.getColumn('C').width = 5; // Spacing
+      wsDash.getColumn('D').width = 35;
+      wsDash.getColumn('E').width = 25;
+
+      // Title
+      wsDash.mergeCells('A1:E2');
+      const titleCell = wsDash.getCell('A1');
+      titleCell.value = 'INTERNSHIP PIPELINE DASHBOARD';
+      titleCell.font = { name: 'Calibri', size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D47A1' } };
+      titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      wsDash.getCell('A4').value = 'Generated On:';
+      wsDash.getCell('A4').font = { bold: true };
+      wsDash.getCell('B4').value = new Date().toLocaleString('id-ID', { dateStyle: 'full', timeStyle: 'short' });
+
+      // Stat Section Header 1
+      wsDash.mergeCells('A6:B6');
+      wsDash.getCell('A6').value = 'PIPELINE STATISTICS';
+      wsDash.getCell('A6').font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      wsDash.getCell('A6').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1976D2' } };
+      wsDash.getCell('A6').alignment = { horizontal: 'center' };
+
+      // Calculate base counts from current filtered data
+      const totalCount = filteredAndSortedInterns.length;
+      const activeCount = filteredAndSortedInterns.filter(i => isActive(i)).length;
+      const incomingCount = filteredAndSortedInterns.filter(i => isIncoming(i)).length;
+      const finishedCount = filteredAndSortedInterns.filter(i => isFinished(i)).length;
+      
+      wsDash.getCell('A7').value = 'Total Interns (Filtered)'; wsDash.getCell('B7').value = totalCount;
+      wsDash.getCell('A8').value = 'Sedang Aktif'; wsDash.getCell('B8').value = activeCount;
+      wsDash.getCell('A9').value = 'Akan Masuk'; wsDash.getCell('B9').value = incomingCount;
+      wsDash.getCell('A10').value = 'Sudah Selesai'; wsDash.getCell('B10').value = finishedCount;
+
+      // Add borders and alignments to stats
+      for(let i=7; i<=10; i++) {
+        wsDash.getCell(`A${i}`).border = { bottom: {style:'thin', color:{argb:'FFEEEEEE'}} };
+        wsDash.getCell(`B${i}`).border = { bottom: {style:'thin', color:{argb:'FFEEEEEE'}} };
+        wsDash.getCell(`B${i}`).alignment = { horizontal: 'right' };
+        wsDash.getCell(`B${i}`).font = { bold: true };
+      }
+
+      // Stat Section Header 2 (Financials)
+      wsDash.mergeCells('D6:E6');
+      wsDash.getCell('D6').value = 'FINANCIAL ESTIMATION (Active/Incoming)';
+      wsDash.getCell('D6').font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      wsDash.getCell('D6').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF388E3C' } };
+      wsDash.getCell('D6').alignment = { horizontal: 'center' };
+
+      const paidCount = filteredAndSortedInterns.filter(i => i.paymentStatus === 'Paid').length;
+      const unpaidCount = filteredAndSortedInterns.filter(i => i.paymentStatus === 'Unpaid').length;
+
+      wsDash.getCell('D7').value = 'Total Paid Interns'; wsDash.getCell('E7').value = paidCount;
+      wsDash.getCell('D8').value = 'Total Unpaid Interns'; wsDash.getCell('E8').value = unpaidCount;
+      wsDash.getCell('D9').value = 'Total Est. Budget / Bulan'; wsDash.getCell('E9').value = totalMonthlyBudget;
+      wsDash.getCell('E9').numFmt = '"Rp"#,##0;[Red]"Rp"-#,##0';
+
+      for(let i=7; i<=9; i++) {
+        wsDash.getCell(`D${i}`).border = { bottom: {style:'thin', color:{argb:'FFEEEEEE'}} };
+        wsDash.getCell(`E${i}`).border = { bottom: {style:'thin', color:{argb:'FFEEEEEE'}} };
+        wsDash.getCell(`E${i}`).alignment = { horizontal: 'right' };
+        wsDash.getCell(`E${i}`).font = { bold: true };
+      }
+
+      // Departments List
+      wsDash.mergeCells('A13:B13');
+      wsDash.getCell('A13').value = 'SBU / SFU DISTRIBUTION (Top 15)';
+      wsDash.getCell('A13').font = { bold: true, color: { argb: 'FF000000' } };
+      wsDash.getCell('A13').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBBDEFB' } };
+      
+      let rowOffset = 14;
+      departmentAbsorption.data.slice(0, 15).forEach((dept) => {
+        wsDash.getCell(`A${rowOffset}`).value = dept.name;
+        wsDash.getCell(`B${rowOffset}`).value = dept.count;
+        wsDash.getCell(`A${rowOffset}`).border = { bottom: {style:'thin', color:{argb:'FFEEEEEE'}} };
+        wsDash.getCell(`B${rowOffset}`).border = { bottom: {style:'thin', color:{argb:'FFEEEEEE'}} };
+        wsDash.getCell(`B${rowOffset}`).alignment = { horizontal: 'right' };
+        rowOffset++;
+      });
+
+
+      // --- SHEET 2: DATA PIPELINE (Format disamakan persis dengan Export CSV lama) ---
+      const wsData = workbook.addWorksheet('Data Pipeline');
+      
+      wsData.columns = [
+        { header: 'NIM', key: 'nim', width: 15 },
+        { header: 'Nama', key: 'name', width: 30 },
+        { header: 'Email', key: 'email', width: 30 },
+        { header: 'Universitas', key: 'university', width: 25 },
+        { header: 'Jurusan', key: 'department', width: 25 },
+        { header: 'Status', key: 'status', width: 15 },
+        { header: 'Acceptance / Rejected Letter', key: 'accLetter', width: 25 },
+        { header: 'Group SBU/SFU', key: 'group', width: 25 },
+        { header: 'Supervisor', key: 'supervisor', width: 20 },
+        { header: 'Join Date', key: 'joinDate', width: 15 },
+        { header: 'Finish Date', key: 'finishDate', width: 15 },
+        { header: 'Internship Status', key: 'internshipStatus', width: 18 },
+        { header: 'Internship Letter', key: 'intLetter', width: 20 },
+        { header: 'Paid / Unpaid', key: 'paymentStatus', width: 15 },
+        { header: 'Daily Allowance (Rp)', key: 'dailyAllowance', width: 20 },
+        { header: 'Estimasi Bulanan (Rp)', key: 'monthlyEst', width: 20 },
+        { header: 'Status Draft Email', key: 'emailSent', width: 18 }
+      ];
+
+      // Styling Data Header
+      wsData.getRow(1).eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1565C0' } };
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+      });
+
+      // Populate Data Rows
+      filteredAndSortedInterns.forEach(i => {
+        const daily = Number(i.dailyAllowance) || 0;
+        const monthly = daily * 22;
+        const dailyStr = i.paymentStatus === 'Paid' ? daily : 0;
+        const monthlyStr = i.paymentStatus === 'Paid' ? monthly : 0;
+
+        const row = wsData.addRow({
+          nim: i.nim || '-',
+          name: i.name,
+          email: i.email || '-',
+          university: i.university,
+          department: i.department,
+          status: i.status,
+          accLetter: '-',
+          group: i.group,
+          supervisor: i.supervisor,
+          joinDate: i.joinDate,
+          finishDate: i.finishDate,
+          internshipStatus: i.internshipStatus,
+          intLetter: '-',
+          paymentStatus: i.paymentStatus || '-',
+          dailyAllowance: dailyStr,
+          monthlyEst: monthlyStr,
+          emailSent: i.emailSent ? 'Sent' : 'Not Sent'
+        });
+
+        // Set Numeric Format
+        row.getCell('dailyAllowance').numFmt = '#,##0';
+        row.getCell('monthlyEst').numFmt = '#,##0';
+      });
+
+      // Trigger Download Blob
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Internship_Dashboard_v2_${new Date().toISOString().slice(0,10)}.xlsx`;
+      link.click();
+
+    } catch (error) {
+      console.error("Gagal export Excel: ", error);
+      setAlertMessage("Terjadi kesalahan saat memproses file Excel.");
+    }
   };
 
-  // --- FIREBASE CRUD HANDLERS ---
   const executeImportExcel = async () => {
     const rows = excelData.trim().split('\n').filter(r => r.trim() !== '');
     if (rows.length < 2) return setAlertMessage('Format tidak valid. Pastikan ada baris header dan data.');
@@ -705,7 +866,6 @@ Meratus Group
         
         for (let i = 0; i < row.length; i++) {
             let char = row[i];
-            
             if (char === '"') {
                 if (inQuotes && row[i + 1] === '"') {
                     curr += '"';
@@ -723,6 +883,7 @@ Meratus Group
         cols.push(curr.trim());
         const cleanCols = cols.map(c => c.trim());
 
+        // Indexes matched strictly with Export Column setup
         const nim = cleanCols[0] || '-';
         const name = cleanCols[1] || 'Unknown';
         const existing = existingInterns.find(i => i.name === name && (i.nim === nim || nim === '-'));
@@ -732,7 +893,6 @@ Meratus Group
           nim: nim, 
           name: name, 
           email: cleanCols[2] && cleanCols[2] !== '-' ? cleanCols[2] : '-', 
-          emailSent: cleanCols[14] === 'Sent',
           university: cleanCols[3] || '-', 
           department: cleanCols[4] || '-',
           status: cleanCols[5] || 'Process', 
@@ -742,6 +902,8 @@ Meratus Group
           finishDate: cleanCols[10] || '-', 
           internshipStatus: cleanCols[11] || '-',
           paymentStatus: cleanCols[13] || '-', 
+          dailyAllowance: cleanCols[14] || '', 
+          emailSent: cleanCols[16] === 'Sent', 
           source: existing ? existing.source : 'import' 
         };
       });
@@ -785,6 +947,8 @@ Meratus Group
     if (!authUser) return setAlertMessage("Akses ditolak: User belum terautentikasi.");
     
     const formData = new FormData(e.currentTarget);
+    const selectedPayment = formData.get('paymentStatus') || '-';
+
     const data = {
       id: editingIntern ? editingIntern.id : Date.now(),
       name: formData.get('name'), 
@@ -799,7 +963,8 @@ Meratus Group
       joinDate: formData.get('joinDate') || '-', 
       finishDate: formData.get('finishDate') || '-',
       internshipStatus: formData.get('internshipStatus') || '-',
-      paymentStatus: formData.get('paymentStatus') || '-',
+      paymentStatus: selectedPayment,
+      dailyAllowance: selectedPayment === 'Paid' ? formData.get('dailyAllowance') : '', 
       source: editingIntern?.source || 'system'
     };
     
@@ -1115,7 +1280,6 @@ Meratus Group
           <p className="text-slate-500 mt-2 max-w-2xl">Platform terpusat untuk mengelola pipeline magang, portal request, partnership universitas, dan site visit.</p>
         </div>
         
-        {/* Tombol Auth Admin */}
         <div>
           {!isAdmin ? (
             <button onClick={() => setIsLoginModalOpen(true)} className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-colors">
@@ -1186,6 +1350,20 @@ Meratus Group
             ))}
           </div>
 
+          {/* HIGHLIGHT: TOTAL BUDGET ESTIMATION */}
+          <div className="bg-gradient-to-r from-blue-700 to-blue-900 p-6 rounded-2xl shadow-sm text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
+             <div className="absolute right-0 top-0 opacity-10 pointer-events-none translate-x-1/4 -translate-y-1/4">
+               <DollarSign className="w-48 h-48" />
+             </div>
+             <div className="z-10">
+                <h3 className="text-lg font-bold opacity-90 flex items-center gap-2"><DollarSign className="w-5 h-5"/> Total Estimasi Budget Bulanan</h3>
+                <p className="text-sm opacity-80 mt-1 max-w-xl">Hanya menjumlahkan (Daily Allowance x 22 Hari) dari semua intern yang berstatus <strong className="text-white">Paid</strong> dan aktif/akan masuk (berdasarkan filter tabel saat ini).</p>
+             </div>
+             <div className="text-3xl lg:text-4xl font-extrabold z-10 shrink-0">
+               {formatRp(totalMonthlyBudget)}
+             </div>
+          </div>
+
           {/* Department Absorption Summary */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200/60 shadow-sm flex flex-col gap-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
@@ -1229,29 +1407,41 @@ Meratus Group
                 </select>
 
                 <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500/20 outline-none max-w-[160px] truncate" value={universityFilter} onChange={(e) => setUniversityFilter(e.target.value)}>
-                  <option value="All">Semua Universitas</option>
+                  <option value="All">Semua Univ</option>
                   {uniqueUniversities.map((uni, idx) => <option key={idx} value={uni}>{uni}</option>)}
                 </select>
 
                 <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500/20 outline-none max-w-[150px] truncate" value={sbuFilter} onChange={(e) => setSbuFilter(e.target.value)}>
-                  <option value="All">Semua SBU/SFU</option>
+                  <option value="All">Semua SBU</option>
                   {uniqueSBUs.map((sbu, idx) => <option key={idx} value={sbu}>{sbu}</option>)}
                 </select>
 
-                <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500/20 outline-none font-semibold text-blue-800" value={timelineFilter} onChange={(e) => setTimelineFilter(e.target.value)}>
+                <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500/20 outline-none" value={paymentFilter} onChange={(e) => setPaymentFilter(e.target.value)}>
+                  <option value="All">Semua Skema</option>
+                  <option value="Paid">Paid</option>
+                  <option value="Unpaid">Unpaid</option>
+                  <option value="-">Belum Diatur</option>
+                </select>
+
+                <select className="bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-blue-500/20 outline-none font-semibold text-blue-800" value={timelineFilter} onChange={(e) => setTimelineFilter(e.target.value)}>
                   <option value="All">Semua Periode</option>
-                  <option value="Incoming">Diterima (Belum Aktif)</option>
+                  <option value="Incoming">Akan Masuk</option>
                   <option value="Active">Sedang Aktif</option>
-                  <option value="Finishing Soon">Hampir Selesai (&lt;30 Hari)</option>
+                  <option value="Finishing Soon">Hampir Selesai</option>
                   <option value="Finished">Sudah Selesai</option>
                 </select>
               </div>
             </div>
             
             <div className="flex gap-2 shrink-0">
-              <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"><Download className="w-4 h-4" /> Export CSV</button>
+              <button onClick={handleExportExcelDashboard} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-emerald-700 rounded-xl text-sm font-bold hover:bg-emerald-50 hover:text-emerald-800 transition-colors shadow-sm"><BarChart3 className="w-4 h-4" /> Export Excel Dashboard</button>
               <button onClick={() => setIsImportModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"><Upload className="w-4 h-4" /> Import Excel</button>
-              <button onClick={() => { setEditingIntern(null); setIsInternModalOpen(true); }} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm"><Plus className="w-4 h-4" /> Add Intern</button>
+              <button onClick={() => { 
+                  setEditingIntern(null); 
+                  setModalPaymentStatus('-');
+                  setModalDailyAllowance('');
+                  setIsInternModalOpen(true); 
+              }} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm"><Plus className="w-4 h-4" /> Add Intern</button>
             </div>
           </div>
 
@@ -1269,7 +1459,7 @@ Meratus Group
                     <th className="px-6 py-4">Mentor</th>
                     <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('joinDate')}><div className="flex items-center gap-2">Join Date <ArrowUpDown className="w-3 h-3 text-slate-400"/></div></th>
                     <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('finishDate')}><div className="flex items-center gap-2">Finish Date <ArrowUpDown className="w-3 h-3 text-slate-400"/></div></th>
-                    <th className="px-6 py-4">Paid/Unpaid</th>
+                    <th className="px-6 py-4">Skema & Allowance</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -1304,7 +1494,17 @@ Meratus Group
                           </div>
                         ) : '-'}
                       </td>
-                      <td className="px-6 py-4 text-slate-600 font-semibold">{intern.paymentStatus || '-'}</td>
+                      <td className="px-6 py-4">
+                        <div className={`font-semibold ${intern.paymentStatus === 'Paid' ? 'text-emerald-700' : 'text-slate-600'}`}>
+                          {intern.paymentStatus || '-'}
+                        </div>
+                        {intern.paymentStatus === 'Paid' && (
+                          <div className="text-[11px] text-slate-500 mt-1">
+                            {formatRp(intern.dailyAllowance || 0)} / hari<br/>
+                            <span className="text-blue-700 font-bold">{formatRp((intern.dailyAllowance || 0) * 22)} / bln</span>
+                          </div>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           
@@ -1333,7 +1533,12 @@ Meratus Group
                             </button>
                           )}
 
-                          <button onClick={() => { setEditingIntern(intern); setIsInternModalOpen(true); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4"/></button>
+                          <button onClick={() => { 
+                             setEditingIntern(intern); 
+                             setModalPaymentStatus(intern.paymentStatus || '-');
+                             setModalDailyAllowance(intern.dailyAllowance || '');
+                             setIsInternModalOpen(true); 
+                          }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4"/></button>
                           <button onClick={() => setItemToDelete({type: 'intern', id: intern.id})} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
                         </div>
                       </td>
@@ -2168,12 +2373,12 @@ Meratus Group
               <Upload className="w-6 h-6"/> Import Pipeline Excel
             </h2>
             <p className="text-sm text-slate-600 mb-4 bg-red-50 p-3 rounded-lg border border-red-100 font-medium">
-              <strong className="text-red-800">Peringatan Overwrite (Timpa Data):</strong> Proses ini akan <strong className="text-red-800">MENGHAPUS SEMUA</strong> data Pipeline saat ini dan menggantinya secara total dengan data baru dari Excel. <br/>
-              Pastikan urutan kolom Excel Anda sama dengan format "Export CSV" sistem.
+              <strong className="text-red-800">Peringatan Overwrite (Timpa Data):</strong> Proses ini akan <strong className="text-red-800">MENGHAPUS SEMUA</strong> data Pipeline saat ini. <br/>
+              Pastikan Anda meng-copy data (mulai dari baris Header sampai baris terakhir) dari <strong className="text-red-800">Sheet: Data Pipeline</strong> pada file Excel yang telah diexport.
             </p>
             <textarea 
               className="w-full h-64 bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-mono whitespace-pre focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none"
-              placeholder="Paste data excel disini..."
+              placeholder="Paste baris Excel disini (Ctrl+V)..."
               value={excelData}
               onChange={(e) => setExcelData(e.target.value)}
             />
@@ -2239,14 +2444,39 @@ Meratus Group
                   <div><label className="block text-sm font-bold text-slate-700 mb-1.5">SBU / SFU</label><input name="group" defaultValue={editingIntern?.group} placeholder="Ex: SFU - Human Capital" className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
                   <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Nama Mentor</label><input name="supervisor" defaultValue={editingIntern?.supervisor} placeholder="Ex: Andrew Fatah" className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
                 </div>
+                
                 <div className="mt-4">
                   <label className="block text-sm font-bold text-slate-700 mb-1.5">Opsi Paid / Unpaid</label>
-                  <select name="paymentStatus" defaultValue={editingIntern?.paymentStatus || '-'} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                  <select 
+                    name="paymentStatus" 
+                    value={modalPaymentStatus} 
+                    onChange={(e) => setModalPaymentStatus(e.target.value)} 
+                    className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  >
                     <option value="-">-</option>
                     <option value="Unpaid">Unpaid</option>
                     <option value="Paid">Paid</option>
                   </select>
                 </div>
+
+                {modalPaymentStatus === 'Paid' && (
+                  <div className="mt-4 animate-in fade-in zoom-in p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                    <label className="block text-sm font-bold text-blue-900 mb-1.5">Daily Allowance (Rp)</label>
+                    <input 
+                      type="number" 
+                      name="dailyAllowance" 
+                      value={modalDailyAllowance} 
+                      onChange={(e) => setModalDailyAllowance(e.target.value)}
+                      placeholder="Contoh: 50000" 
+                      className="w-full bg-white border border-blue-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" 
+                    />
+                    {modalDailyAllowance && (
+                      <div className="mt-2 text-xs font-semibold text-blue-700">
+                        Kalkulasi Estimasi Bulanan: {formatRp(Number(modalDailyAllowance) * 22)} (x 22 Hari)
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
@@ -2409,4 +2639,4 @@ Meratus Group
 
     </div>
   );
-}
+}s
