@@ -7,7 +7,7 @@ import {
   BookOpen, Clock, CheckCircle2, XCircle, ArrowUpDown, AlertCircle,
   Edit2, Trash2, MapPin, ListTodo, Presentation, Camera,
   Shield, Award, DollarSign, UserCheck, PenTool, ClipboardCheck, Database, Settings, Briefcase, DownloadCloud,
-  Send, Inbox, Lock, Unlock, KeyRound, Mail, BarChart3
+  Send, Inbox, Lock, Unlock, KeyRound, Mail, BarChart3, PieChart, TrendingUp
 } from 'lucide-react';
 
 // --- MOCK COMPONENTS ---
@@ -125,6 +125,28 @@ const parseDateStr = (dateStr) => {
   if (dayMatch) day = parseInt(dayMatch[0]);
   
   return new Date(year, month, day).getTime();
+};
+
+// --- HELPER: CALCULATE WORKING DAYS (MON-FRI) ---
+const getWorkingDays = (startDateMs, endDateMs) => {
+  if (!startDateMs || !endDateMs || startDateMs > endDateMs) return 0;
+  let count = 0;
+  let current = new Date(startDateMs);
+  const end = new Date(endDateMs);
+  
+  // Set to midnight to avoid timezone shift issues
+  current.setHours(0,0,0,0);
+  end.setHours(0,0,0,0);
+  
+  while (current <= end) {
+    const day = current.getDay();
+    // 0 = Sunday, 6 = Saturday
+    if (day !== 0 && day !== 6) { 
+      count++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  return count;
 };
 
 export default function InternshipManagement() {
@@ -246,6 +268,10 @@ export default function InternshipManagement() {
   const [editingSopType, setEditingSopType] = useState('intern');
 
   const [itemToDelete, setItemToDelete] = useState(null);
+  
+  // -- YTD BREAKDOWN MODAL STATES --
+  const [isYtdModalOpen, setIsYtdModalOpen] = useState(false);
+  const [ytdBreakdownTab, setYtdBreakdownTab] = useState('dept');
 
   // --- ADMIN LOGIN LOGIC ---
   const handleLogin = (e) => {
@@ -281,7 +307,7 @@ export default function InternshipManagement() {
     });
   };
 
-  // --- DYNAMIC EXCELJS LOADER (NEW!) ---
+  // --- DYNAMIC EXCELJS LOADER ---
   const loadExcelJS = async () => {
     if (window.ExcelJS) return window.ExcelJS;
     return new Promise((resolve, reject) => {
@@ -579,6 +605,100 @@ Meratus Group
     }, 0);
   }, [filteredAndSortedInterns]);
 
+  // CALCULATE YTD (YEAR TO DATE) BUDGET PER INTERN
+  const calculateYTDPerIntern = (intern) => {
+    if (intern.paymentStatus !== 'Paid') return 0;
+    const daily = Number(intern.dailyAllowance) || 0;
+    if (daily === 0) return 0;
+
+    const joinTime = parseDateStr(intern.joinDate);
+    const finishTime = parseDateStr(intern.finishDate);
+    if (joinTime === 0) return 0; // Skip if invalid join date
+
+    const currentYear = new Date().getFullYear();
+    const startOfYear = new Date(currentYear, 0, 1).getTime();
+    
+    const todayZeroed = new Date();
+    todayZeroed.setHours(0,0,0,0);
+    const today = todayZeroed.getTime();
+
+    // Start calculation from Join Date OR Jan 1st of this year (whichever is later)
+    const effectiveStart = Math.max(joinTime, startOfYear);
+    
+    // End calculation at Finish Date OR Today (whichever is earlier)
+    let effectiveEnd = today;
+    if (finishTime > 0) {
+      effectiveEnd = Math.min(finishTime, today);
+    }
+
+    if (effectiveStart > effectiveEnd) return 0;
+
+    const workingDays = getWorkingDays(effectiveStart, effectiveEnd);
+    return workingDays * daily;
+  };
+
+  // CALCULATE TOTAL YTD BUDGET 
+  const totalYTDBudget = useMemo(() => {
+    return filteredAndSortedInterns.reduce((sum, intern) => {
+      return sum + calculateYTDPerIntern(intern);
+    }, 0);
+  }, [filteredAndSortedInterns]);
+
+  // --- YTD BREAKDOWN BY DEPT ---
+  const ytdDeptBreakdown = useMemo(() => {
+    const deptData = {};
+    filteredAndSortedInterns.forEach(intern => {
+      const cost = calculateYTDPerIntern(intern);
+      if (cost > 0) {
+        const dept = intern.group && intern.group !== '-' ? intern.group : 'Unassigned';
+        deptData[dept] = (deptData[dept] || 0) + cost;
+      }
+    });
+    return Object.entries(deptData)
+      .map(([name, cost]) => ({ name, cost }))
+      .sort((a, b) => b.cost - a.cost);
+  }, [filteredAndSortedInterns]);
+
+  // --- YTD BREAKDOWN BY MONTH ---
+  const ytdMonthlyBreakdown = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const todayZeroed = new Date();
+    todayZeroed.setHours(0,0,0,0);
+    const today = todayZeroed.getTime();
+
+    const monthlyData = Array.from({length: 12}, (_, i) => ({
+      monthName: new Date(currentYear, i).toLocaleString('id-ID', { month: 'long' }),
+      cost: 0
+    }));
+
+    filteredAndSortedInterns.forEach(intern => {
+      if (intern.paymentStatus !== 'Paid') return;
+      const daily = Number(intern.dailyAllowance) || 0;
+      if (daily === 0) return;
+
+      const joinTime = parseDateStr(intern.joinDate);
+      const finishTime = parseDateStr(intern.finishDate);
+      if (joinTime === 0) return;
+
+      for (let month = 0; month < 12; month++) {
+        const startOfMonth = new Date(currentYear, month, 1).getTime();
+        const endOfMonth = new Date(currentYear, month + 1, 0).getTime();
+
+        if (startOfMonth > today) continue; // Jangan hitung bulan di masa depan
+
+        const effectiveStart = Math.max(joinTime, startOfMonth);
+        const effectiveEnd = Math.min(finishTime > 0 ? finishTime : today, Math.min(endOfMonth, today));
+
+        if (effectiveStart <= effectiveEnd) {
+          const workingDays = getWorkingDays(effectiveStart, effectiveEnd);
+          monthlyData[month].cost += workingDays * daily;
+        }
+      }
+    });
+
+    return monthlyData.filter(d => d.cost > 0);
+  }, [filteredAndSortedInterns]);
+
   const departmentAbsorption = useMemo(() => {
     const absorption = {};
     let maxCount = 0;
@@ -734,10 +854,15 @@ Meratus Group
 
       wsDash.getCell('D7').value = 'Total Paid Interns'; wsDash.getCell('E7').value = paidCount;
       wsDash.getCell('D8').value = 'Total Unpaid Interns'; wsDash.getCell('E8').value = unpaidCount;
+      
       wsDash.getCell('D9').value = 'Total Est. Budget / Bulan'; wsDash.getCell('E9').value = totalMonthlyBudget;
       wsDash.getCell('E9').numFmt = '"Rp"#,##0;[Red]"Rp"-#,##0';
+      
+      // YTD Calculation Addition
+      wsDash.getCell('D10').value = 'Total Cost YTD (Year-to-Date)'; wsDash.getCell('E10').value = totalYTDBudget;
+      wsDash.getCell('E10').numFmt = '"Rp"#,##0;[Red]"Rp"-#,##0';
 
-      for(let i=7; i<=9; i++) {
+      for(let i=7; i<=10; i++) {
         wsDash.getCell(`D${i}`).border = { bottom: {style:'thin', color:{argb:'FFEEEEEE'}} };
         wsDash.getCell(`E${i}`).border = { bottom: {style:'thin', color:{argb:'FFEEEEEE'}} };
         wsDash.getCell(`E${i}`).alignment = { horizontal: 'right' };
@@ -761,7 +886,7 @@ Meratus Group
       });
 
 
-      // --- SHEET 2: DATA PIPELINE (Format disamakan persis dengan Export CSV lama) ---
+      // --- SHEET 2: DATA PIPELINE ---
       const wsData = workbook.addWorksheet('Data Pipeline');
       
       wsData.columns = [
@@ -781,6 +906,7 @@ Meratus Group
         { header: 'Paid / Unpaid', key: 'paymentStatus', width: 15 },
         { header: 'Daily Allowance (Rp)', key: 'dailyAllowance', width: 20 },
         { header: 'Estimasi Bulanan (Rp)', key: 'monthlyEst', width: 20 },
+        { header: 'Total YTD Cost (Rp)', key: 'ytdCost', width: 20 }, // New column for YTD
         { header: 'Status Draft Email', key: 'emailSent', width: 18 }
       ];
 
@@ -798,6 +924,7 @@ Meratus Group
         const monthly = daily * 22;
         const dailyStr = i.paymentStatus === 'Paid' ? daily : 0;
         const monthlyStr = i.paymentStatus === 'Paid' ? monthly : 0;
+        const ytdStr = i.paymentStatus === 'Paid' ? calculateYTDPerIntern(i) : 0;
 
         const row = wsData.addRow({
           nim: i.nim || '-',
@@ -816,12 +943,14 @@ Meratus Group
           paymentStatus: i.paymentStatus || '-',
           dailyAllowance: dailyStr,
           monthlyEst: monthlyStr,
+          ytdCost: ytdStr,
           emailSent: i.emailSent ? 'Sent' : 'Not Sent'
         });
 
         // Set Numeric Format
         row.getCell('dailyAllowance').numFmt = '#,##0';
         row.getCell('monthlyEst').numFmt = '#,##0';
+        row.getCell('ytdCost').numFmt = '#,##0';
       });
 
       // Trigger Download Blob
@@ -903,7 +1032,7 @@ Meratus Group
           internshipStatus: cleanCols[11] || '-',
           paymentStatus: cleanCols[13] || '-', 
           dailyAllowance: cleanCols[14] || '', 
-          emailSent: cleanCols[16] === 'Sent', 
+          emailSent: cleanCols[17] === 'Sent', // Index 17 is now emailSent due to YTD column insertion 
           source: existing ? existing.source : 'import' 
         };
       });
@@ -1273,6 +1402,69 @@ Meratus Group
         </div>
       )}
 
+      {/* YTD Breakdown Modal */}
+      {isYtdModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6 md:p-8 border border-slate-100 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2"><PieChart className="w-6 h-6 text-emerald-600"/> Breakdown YTD Budget</h3>
+                <p className="text-sm text-slate-500 mt-1">Rincian detail penggunaan budget aktual ({new Date().getFullYear()}) berdasar filter saat ini.</p>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 font-extrabold px-4 py-2 rounded-xl text-xl shadow-sm">
+                {formatRp(totalYTDBudget)}
+              </div>
+            </div>
+
+            <div className="flex space-x-4 border-b border-slate-200 mb-4 shrink-0">
+              <button onClick={() => setYtdBreakdownTab('dept')} className={`pb-3 text-sm font-bold transition-colors relative ${ytdBreakdownTab === 'dept' ? 'text-emerald-600' : 'text-slate-500 hover:text-slate-800'}`}>Berdasarkan SBU/SFU {ytdBreakdownTab === 'dept' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-emerald-600 rounded-t-full"></span>}</button>
+              <button onClick={() => setYtdBreakdownTab('month')} className={`pb-3 text-sm font-bold transition-colors relative ${ytdBreakdownTab === 'month' ? 'text-emerald-600' : 'text-slate-500 hover:text-slate-800'}`}>Tren Bulanan {ytdBreakdownTab === 'month' && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-emerald-600 rounded-t-full"></span>}</button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 pr-2 space-y-4 pb-4">
+              {ytdBreakdownTab === 'dept' && (
+                ytdDeptBreakdown.length > 0 ? ytdDeptBreakdown.map((item, i) => (
+                  <div key={i} className="bg-slate-50 p-4 rounded-xl border border-slate-200/60">
+                    <div className="flex justify-between items-end mb-2">
+                      <span className="font-bold text-slate-800">{item.name}</span>
+                      <span className="font-bold text-emerald-700">{formatRp(item.cost)}</span>
+                    </div>
+                    <div className="w-full bg-slate-200 rounded-full h-2.5">
+                      <div className="bg-emerald-500 h-2.5 rounded-full" style={{ width: `${(item.cost / ytdDeptBreakdown[0].cost) * 100}%` }}></div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="text-center py-10 text-slate-500 text-sm">Tidak ada data intern Paid yang valid untuk dikalkulasi.</div>
+                )
+              )}
+
+              {ytdBreakdownTab === 'month' && (
+                ytdMonthlyBreakdown.length > 0 ? ytdMonthlyBreakdown.map((item, i) => {
+                  const maxMonthlyCost = Math.max(...ytdMonthlyBreakdown.map(m => m.cost));
+                  return (
+                    <div key={i} className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 flex items-center gap-4">
+                      <div className="w-24 shrink-0 font-bold text-slate-700">{item.monthName}</div>
+                      <div className="flex-1">
+                        <div className="w-full bg-slate-200 rounded-full h-3">
+                          <div className="bg-emerald-500 h-3 rounded-full relative group transition-all" style={{ width: `${(item.cost / maxMonthlyCost) * 100}%` }}></div>
+                        </div>
+                      </div>
+                      <div className="w-32 shrink-0 text-right font-bold text-emerald-700">{formatRp(item.cost)}</div>
+                    </div>
+                  );
+                }) : (
+                  <div className="text-center py-10 text-slate-500 text-sm">Belum ada pengeluaran YTD tercatat di tahun ini.</div>
+                )
+              )}
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end shrink-0">
+               <button onClick={() => setIsYtdModalOpen(false)} className="px-6 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-colors">Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Section dengan Gatekeeping Logic */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -1350,17 +1542,37 @@ Meratus Group
             ))}
           </div>
 
-          {/* HIGHLIGHT: TOTAL BUDGET ESTIMATION */}
-          <div className="bg-gradient-to-r from-blue-700 to-blue-900 p-6 rounded-2xl shadow-sm text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative overflow-hidden">
+          {/* HIGHLIGHT: TOTAL BUDGET ESTIMATION & YTD */}
+          <div className="bg-gradient-to-r from-blue-700 to-blue-900 p-6 md:px-8 rounded-2xl shadow-sm text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative overflow-hidden">
              <div className="absolute right-0 top-0 opacity-10 pointer-events-none translate-x-1/4 -translate-y-1/4">
                <DollarSign className="w-48 h-48" />
              </div>
-             <div className="z-10">
-                <h3 className="text-lg font-bold opacity-90 flex items-center gap-2"><DollarSign className="w-5 h-5"/> Total Estimasi Budget Bulanan</h3>
-                <p className="text-sm opacity-80 mt-1 max-w-xl">Hanya menjumlahkan (Daily Allowance x 22 Hari) dari semua intern yang berstatus <strong className="text-white">Paid</strong> dan aktif/akan masuk (berdasarkan filter tabel saat ini).</p>
+             
+             {/* Left Section: Monthly */}
+             <div className="z-10 flex-1">
+                <h3 className="text-lg font-bold opacity-90 flex items-center gap-2"><DollarSign className="w-5 h-5"/> Estimasi Budget Bulanan</h3>
+                <p className="text-xs md:text-sm opacity-80 mt-1 max-w-sm leading-relaxed">Estimasi biaya 1 bulan ke depan untuk semua intern berstatus <strong className="text-white">Paid</strong> yang sedang aktif / akan masuk.</p>
+                <div className="text-3xl lg:text-4xl font-extrabold mt-3 tracking-tight">
+                  {formatRp(totalMonthlyBudget)}
+                </div>
              </div>
-             <div className="text-3xl lg:text-4xl font-extrabold z-10 shrink-0">
-               {formatRp(totalMonthlyBudget)}
+
+             {/* Divider */}
+             <div className="hidden md:block w-px h-24 bg-blue-500/50 z-10 shrink-0"></div>
+             <div className="md:hidden w-full h-px bg-blue-500/50 z-10 shrink-0"></div>
+
+             {/* Right Section: YTD */}
+             <div className="z-10 flex-1">
+                <h3 className="text-lg font-bold opacity-90 flex items-center gap-2 text-emerald-200"><BarChart3 className="w-5 h-5"/> Total Cost YTD</h3>
+                <p className="text-xs md:text-sm opacity-80 mt-1 max-w-sm leading-relaxed text-emerald-100">Kalkulasi aktual hari kerja sejak awal tahun ini hingga hari ini untuk intern <strong className="text-white">Paid</strong>.</p>
+                <div className="text-3xl lg:text-4xl font-extrabold mt-3 text-emerald-300 tracking-tight">
+                  {formatRp(totalYTDBudget)}
+                </div>
+                {totalYTDBudget > 0 && (
+                  <button onClick={() => setIsYtdModalOpen(true)} className="mt-3 text-xs md:text-sm font-bold text-emerald-900 bg-emerald-100 hover:bg-emerald-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 w-max transition-colors shadow-sm">
+                    <TrendingUp className="w-4 h-4"/> Lihat Breakdown
+                  </button>
+                )}
              </div>
           </div>
 
@@ -1499,9 +1711,10 @@ Meratus Group
                           {intern.paymentStatus || '-'}
                         </div>
                         {intern.paymentStatus === 'Paid' && (
-                          <div className="text-[11px] text-slate-500 mt-1">
+                          <div className="text-[11px] text-slate-500 mt-1 leading-relaxed">
                             {formatRp(intern.dailyAllowance || 0)} / hari<br/>
-                            <span className="text-blue-700 font-bold">{formatRp((intern.dailyAllowance || 0) * 22)} / bln</span>
+                            <span className="text-blue-700 font-bold">{formatRp((intern.dailyAllowance || 0) * 22)} / bln</span><br/>
+                            <span className="text-emerald-600 font-bold" title="Total kalkulasi dari awal tahun hingga saat ini">YTD: {formatRp(calculateYTDPerIntern(intern))}</span>
                           </div>
                         )}
                       </td>
@@ -2365,7 +2578,7 @@ Meratus Group
         </div>
       )}
 
-      {/* Import Excel */}
+      {/* Import Excel Modal */}
       {isImportModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 md:p-8 border border-slate-100">
@@ -2390,7 +2603,7 @@ Meratus Group
         </div>
       )}
 
-      {/* Add/Edit Intern */}
+      {/* Add/Edit Intern Modal */}
       {isInternModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 md:p-8 max-h-[90vh] overflow-y-auto border border-slate-100">
@@ -2482,8 +2695,8 @@ Meratus Group
               <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-2"><Calendar className="w-4 h-4"/> Periode Pelaksanaan</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Join Date</label><input type="text" placeholder="Ex: 12 Jan 2024" name="joinDate" defaultValue={editingIntern?.joinDate} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
-                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Finish Date</label><input type="text" placeholder="Ex: 12 Jun 2024" name="finishDate" defaultValue={editingIntern?.finishDate} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" /></div>
+                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Join Date</label><input type="date" name="joinDate" defaultValue={editingIntern?.joinDate} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-sm" /></div>
+                  <div><label className="block text-sm font-bold text-slate-700 mb-1.5">Finish Date</label><input type="date" name="finishDate" defaultValue={editingIntern?.finishDate} className="w-full bg-white border border-slate-200 p-2.5 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-sm" /></div>
                 </div>
               </div>
 
